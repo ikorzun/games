@@ -1,0 +1,1867 @@
+/* Файлы JetBrains Mono — переменные (ось насыщенности 100–800): тонкие начертания заставки берутся из них же. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url(./fonts/JetBrainsMono-400-cyrillic.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url(./fonts/JetBrainsMono-400-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* Название, бирки, реплики Смотрителя, записки, титры — Geologica (выбор партнёра 25.11 из тонких шрифтов с кириллицей; до
+   того — DM Mono, у которого кириллицы нет). Файл переменный: веса 200–300 из одного файла на набор знаков. */
+@font-face {
+  font-family: 'Geologica';
+  font-style: normal;
+  font-weight: 200 300;
+  font-display: swap;
+  src: url(./fonts/Geologica-cyrillic.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Geologica';
+  font-style: normal;
+  font-weight: 200 300;
+  font-display: swap;
+  src: url(./fonts/Geologica-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.vz-root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+  color: #e9e6dc;
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 16px;
+  line-height: 1.3;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+.vz-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+}
+
+/* ── Надписи записи ── */
+.vz-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  padding: max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  box-sizing: border-box;
+  font-size: clamp(12px, 1.1vmin + 8px, 19px);
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 1px 1px rgba(0, 0, 0, 0.9);
+  color: rgba(240, 238, 228, 0.88);
+}
+.vz-hud.is-hidden {
+  display: none;
+}
+.vz-hud__top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.2em 1.2em;
+}
+.vz-hud__tl,
+.vz-hud__tr {
+  display: flex;
+  gap: 0.7em;
+  align-items: center;
+  white-space: nowrap;
+  min-width: 0;
+}
+/* На узком экране время переезжает на вторую строку, оставаясь у правого края. */
+.vz-hud__tr {
+  margin-left: auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15em;
+}
+.vz-hud__dot {
+  flex: none;
+  width: 0.62em;
+  height: 0.62em;
+  border-radius: 50%;
+  background: #e0362c;
+  box-shadow: 0 0 6px rgba(224, 54, 44, 0.8);
+  animation: vz-blink 1.6s steps(1) infinite;
+}
+@keyframes vz-blink {
+  50% {
+    opacity: 0.15;
+  }
+}
+.vz-hud__cam,
+.vz-hud__place {
+  opacity: 0.7;
+}
+/* На компьютере имя места — рядом с номером камеры; в узком окне строка переносится, а не уходит за край (матрица
+   раскладки, CI 17.11: «КАМ-12Б · жёлтые комнаты» на 800 px). На телефоне имя — под временем (hud.ts): под строкой REC
+   там кнопка паузы. */
+.vz-hud__cam {
+  white-space: normal;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.vz-hud__place:empty {
+  display: none;
+}
+/* Миг: место стёрто до конца — запись обрывается. Чёрный кадр без перехода, REC гаснет, часы стоят на 00:00:00; потом
+   гаснут и они, и чернота сходит. */
+.vz-hud__cut {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.7s linear;
+  z-index: 0;
+}
+.vz-hud.is-cut .vz-hud__cut {
+  opacity: 1;
+  transition: none;
+}
+.vz-hud.is-cut .vz-hud__top {
+  position: relative;
+  z-index: 1;
+}
+.vz-hud.is-cut .vz-hud__dot,
+.vz-hud.is-cut .vz-hud__rec,
+.vz-hud.is-cut .vz-hud__cam,
+.vz-hud.is-cut .vz-hud__lap,
+.vz-hud.is-cut-dark .vz-hud__clock {
+  visibility: hidden;
+}
+.vz-hud.is-cut > :not(.vz-hud__top):not(.vz-hud__cut) {
+  visibility: hidden;
+}
+.vz-cutting .vz-touch {
+  visibility: hidden;
+}
+/* Номер круга — под временем записи, тише его. */
+.vz-hud__lap {
+  font-size: 0.86em;
+  opacity: 0.55;
+}
+.vz-hud__lap:empty {
+  display: none;
+}
+.vz-hud__fps {
+  font-size: 0.8em;
+  opacity: 0.75;
+  /* Строка замера длинная: на узком телефоне переносится, прижатая к правому краю, а не уходит за левый. */
+  max-width: calc(100vw - 24px);
+  white-space: normal;
+  text-align: right;
+}
+.vz-hud__hint {
+  position: absolute;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  max-width: min(92%, 46em);
+  text-align: center;
+  font-size: clamp(14px, 1vmin + 10px, 18px);
+  letter-spacing: 0.01em;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+.vz-hud__hint.is-on {
+  opacity: 0.85;
+}
+/* На тач-устройствах низ экрана занят кнопкой фонаря — подсказка встаёт над ней, и над кольцом, которое под пальцем
+   больше кнопки в 1,55 раза (иначе оно заходило на строку примерно на 15 px — нашёл куратор). */
+.vz-root.is-touch .vz-hud__hint {
+  bottom: calc(max(34px, env(safe-area-inset-bottom) + 20px) + 124px);
+}
+.vz-hud__prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  transform: translateX(-50%);
+  width: min(88%, 34em);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6em;
+  text-align: center;
+  font-size: clamp(15px, 1.2vmin + 10px, 21px);
+  letter-spacing: 0.01em;
+  color: #f3e7c2;
+}
+.vz-hud.is-shake .vz-hud__prompt {
+  display: flex;
+}
+.vz-hud__bar {
+  width: min(70%, 15em);
+  height: 5px;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.vz-hud__bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #f3d98a;
+}
+
+/* ── Заставка, пауза, отчёт, титры ──
+   Слова партнёра 19.11: название и сразу под ним сон и «начать»; на фоне еле заметные светлячки из точек; все настройки —
+   под шестерёнкой справа вверху, выпадающим списком, переключаемое — сегмент-контролами; шрифты тонкие, почти
+   эфемерные; название — Geologica (до 25.11 — DM Mono). */
+.vz-overlay {
+  --vz-ink: #ece8dd;
+  --vz-dim: rgba(236, 232, 221, 0.6);
+  --vz-faint: rgba(236, 232, 221, 0.4);
+  --vz-warm: #f3d98a;
+  --vz-line: rgba(255, 255, 255, 0.13);
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.8);
+  color: var(--vz-ink);
+  cursor: pointer;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  box-sizing: border-box;
+  font-weight: 300;
+}
+.vz-overlay.is-on {
+  display: flex;
+}
+.vz-overlay[data-mode='loading'],
+.vz-overlay[data-mode='error'] {
+  cursor: default;
+  background: #000;
+}
+.vz-overlay[data-mode='report'],
+.vz-overlay[data-mode='credits'] {
+  background: rgba(0, 0, 0, 0.94);
+}
+.vz-fireflies {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.vz-overlay__box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7em;
+  text-align: center;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: auto 0;
+}
+.vz-overlay__foot {
+  position: relative;
+  flex: none;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+/* Предупреждение о вспышках — тихо у нижнего края (куратор, пачка 50, 308): видно до первой вспышки, но не спорит с названием. */
+.vz-overlay__note {
+  max-width: 36em;
+  font-size: 11.5px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  text-align: center;
+  color: rgba(236, 232, 221, 0.6);
+  text-wrap: balance;
+}
+.vz-overlay__note:empty,
+.vz-overlay__rotate {
+  display: none;
+}
+.vz-overlay__title {
+  font-family: 'Geologica', system-ui, sans-serif;
+  font-weight: 200;
+  font-size: clamp(24px, 5.8vmin, 62px);
+  letter-spacing: 0.32em;
+  /* Разрядка добавляет пробел после последней буквы — уравновешиваем его слева, чтобы слово стояло по центру. */
+  padding-left: 0.32em;
+  box-sizing: border-box;
+  max-width: 100%;
+  color: #f4f1e8;
+  text-wrap: balance;
+  text-shadow: 0 0 28px rgba(243, 217, 138, 0.08);
+}
+.vz-overlay__sub {
+  font-size: clamp(12px, 1.2vmin + 6px, 16px);
+  font-weight: 200;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--vz-faint);
+  text-wrap: balance;
+}
+.vz-overlay__sub:empty {
+  display: none;
+}
+.vz-overlay__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+  margin-top: 0.4em;
+  max-width: min(100%, 34em);
+  text-align: center;
+  font-size: clamp(14px, 1vmin + 9px, 18px);
+  line-height: 1.45;
+  text-wrap: balance;
+}
+.vz-overlay__body:empty {
+  display: none;
+}
+/* Строка про сон — единственный ответ игроку на «что делать» (плейтест 19.11): тонкая, но читается (куратор, пачка 50, 312). */
+.vz-overlay__line--plain {
+  font-weight: 300;
+  color: rgba(236, 232, 221, 0.9);
+  letter-spacing: 0.02em;
+}
+.vz-overlay__line--head {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.82em;
+  color: var(--vz-dim);
+  margin-top: 0.5em;
+}
+.vz-overlay__line--todo,
+.vz-overlay__line--done {
+  padding-left: 1.5em;
+  position: relative;
+  text-align: left;
+}
+.vz-overlay__line--todo::before,
+.vz-overlay__line--done::before {
+  content: '';
+  position: absolute;
+  left: 0.15em;
+  top: 0.38em;
+  width: 0.62em;
+  height: 0.62em;
+  border: 1px solid currentColor;
+  box-sizing: border-box;
+}
+.vz-overlay__line--done::before {
+  background: currentColor;
+}
+.vz-overlay__line--done {
+  color: #c9d9b4;
+}
+.vz-overlay__line--dim {
+  color: var(--vz-dim);
+}
+.vz-overlay__prompt {
+  margin-top: 1.4em;
+  font-size: clamp(12px, 0.6vmin + 9px, 15px);
+  font-weight: 300;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--vz-warm);
+  animation: vz-pulse 2.6s ease-in-out infinite;
+  max-width: 32em;
+  text-wrap: balance;
+}
+.vz-overlay[data-mode='error'] .vz-overlay__prompt,
+.vz-overlay[data-mode='loading'] .vz-overlay__prompt {
+  animation: none;
+  color: var(--vz-dim);
+}
+/* Титры: строки авторства моделей — мелко, с прокруткой внутри карточки (их почти сорок). */
+.vz-overlay[data-mode='credits'] .vz-overlay__body {
+  max-height: 52vh;
+  overflow-y: auto;
+  font-size: clamp(10px, 0.6vmin + 7px, 13px);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* Шестерёнка: тонкая линия, справа вверху; открытый список — она чуть повёрнута и ярче. */
+.vz-overlay__gear {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right));
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--vz-dim);
+  cursor: pointer;
+  transition:
+    color 0.2s,
+    transform 0.35s ease,
+    background-color 0.2s;
+}
+.vz-overlay__gear:hover,
+.vz-overlay.is-settings .vz-overlay__gear {
+  color: var(--vz-ink);
+}
+.vz-overlay.is-settings .vz-overlay__gear {
+  transform: rotate(30deg);
+  background: rgba(255, 255, 255, 0.06);
+}
+.vz-overlay__gear:focus-visible,
+.vz-seg__opt:focus-visible,
+.vz-overlay__opt:focus-visible {
+  outline: 1px solid var(--vz-warm);
+  outline-offset: 2px;
+}
+.vz-overlay__gear[hidden] {
+  display: none;
+}
+
+/* Выпадающий список настроек. */
+.vz-settings {
+  position: absolute;
+  top: calc(max(8px, env(safe-area-inset-top)) + 50px);
+  right: max(10px, env(safe-area-inset-right));
+  width: min(400px, calc(100% - 20px));
+  max-height: calc(100% - max(8px, env(safe-area-inset-top)) - 62px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 14px 16px 12px;
+  background: rgba(14, 13, 12, 0.88);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--vz-line);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  cursor: default;
+  text-align: left;
+  font-size: 13px;
+  animation: vz-drop 0.16s ease-out;
+}
+.vz-settings[hidden] {
+  display: none;
+}
+@keyframes vz-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.vz-settings__rows {
+  display: grid;
+  gap: 10px;
+}
+/* Колонка подписей — одна ширина на все строки: самая длинная подпись («SENSIBILIDAD», 12 знаков) в неё входит,
+   и переключатели стоят ровно друг под другом (иначе длинная подпись сдвигала свой). Ширина постоянная, а не «по
+   подписи»: подпись длиннее переносится внутри колонки и не отнимает место у переключателя — три названия языка
+   рядом с удлинённой на треть подписью (псевдолокализация матрицы) иначе ломались посреди слова. */
+.vz-settings__row {
+  display: grid;
+  grid-template-columns: 7.6em minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 12px;
+  min-width: 0;
+}
+.vz-settings__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vz-dim);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Сегмент-контрол: рамка-дорожка, выбранное — белая плашка с чёрным текстом (партнёр 19.11: «выбранные залиты белым, цвет черный»). */
+.vz-seg {
+  display: flex;
+  min-width: 0;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--vz-line);
+  border-radius: 8px;
+}
+.vz-seg__opt {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 300;
+  line-height: 1.15;
+  color: var(--vz-dim);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+.vz-seg__opt:hover {
+  color: var(--vz-ink);
+}
+.vz-seg__opt.is-on {
+  color: #000;
+  font-weight: 400;
+  background: #fff;
+  box-shadow: none;
+}
+.vz-seg__opt.is-on:hover {
+  color: #000;
+}
+.vz-settings__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.vz-settings__acts:not(:has(> :not([hidden]))) {
+  display: none;
+}
+.vz-overlay__opt {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  color: var(--vz-ink);
+  background: transparent;
+  border: 1px solid var(--vz-line);
+  border-radius: 8px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.vz-overlay__opt:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.vz-overlay__opt.is-armed {
+  color: #f0a98c;
+  border-color: rgba(240, 169, 140, 0.45);
+}
+.vz-overlay__opt[hidden] {
+  display: none;
+}
+/* Замер 30 с: под подписью — итог прошлого замера, мелко и тише; цифры — ровной шириной. */
+.vz-overlay__opt--measure {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+.vz-overlay__opt-sub {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+  color: var(--vz-faint);
+  font-variant-numeric: tabular-nums;
+}
+.vz-overlay__opt-sub:empty {
+  display: none;
+}
+.vz-settings__info {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--vz-line);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--vz-faint);
+}
+.vz-settings__info:empty {
+  display: none;
+}
+.vz-settings__globe {
+  flex: none;
+  opacity: 0.85;
+}
+/* Палец: сегменты и кнопки выше — по ним легче попасть. */
+.vz-root.is-touch .vz-seg__opt {
+  min-height: 36px;
+}
+.vz-root.is-touch .vz-overlay__opt {
+  min-height: 40px;
+}
+/* Телефон в портрете: подпись над переключателем, у переключателя вся ширина. */
+@media (max-width: 440px) {
+  .vz-settings__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .vz-settings {
+    padding: 12px 12px 10px;
+  }
+}
+/* Низкий широкий экран (телефон лёжа, маленькое окно): список в две колонки, чтобы поместиться без прокрутки. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .vz-settings {
+    width: min(720px, calc(100% - 20px));
+  }
+  .vz-settings__rows {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 22px;
+    gap: 8px 22px;
+  }
+  /* Подпись над переключателем: в колонке шириной около 280 px три названия языка рядом с подписью не помещались
+     и ломались посреди слова («Españo-l»), а длинная подпись сдвигала свой переключатель. */
+  .vz-settings__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .vz-settings__acts {
+    margin-top: 10px;
+  }
+  .vz-settings__info {
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+}
+/* Низкий экран: карточка плотнее. */
+@media (max-height: 460px) {
+  .vz-overlay__box {
+    gap: 0.35em;
+  }
+  .vz-overlay__prompt {
+    margin-top: 0.6em;
+  }
+  .vz-overlay__body {
+    font-size: 14px;
+    gap: 0.15em;
+    margin-top: 0.2em;
+  }
+}
+@media (max-width: 560px) {
+  .vz-overlay__title {
+    letter-spacing: 0.2em;
+    padding-left: 0.2em;
+  }
+  .vz-overlay__body {
+    font-size: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vz-overlay__prompt,
+  .vz-settings {
+    animation: none;
+  }
+  .vz-overlay__gear {
+    transition: none;
+  }
+}
+
+@keyframes vz-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Просьбу повернуть телефон больше не показываем: портрет — полноценный режим (партнёр играет в портрете; предложение
+   основной модели 17.11, принято). Строка осталась в разметке на случай, если понадобится снова. */
+
+/* ── Тач-управление ── */
+.vz-touch {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+.vz-touch.is-hidden {
+  display: none;
+}
+.vz-touch__stick {
+  position: absolute;
+  width: 124px;
+  height: 124px;
+  margin: -62px 0 0 -62px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.vz-touch__stick.is-on {
+  opacity: 1;
+}
+.vz-touch__stick.is-walk {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+/* Кольцо под пальцем, который идёт вперёд удержанием. */
+.vz-touch__hold {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.vz-touch__hold.is-on {
+  opacity: 1;
+}
+.vz-touch__knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+  transform: translate(-50%, -50%);
+}
+.vz-touch__btn {
+  position: absolute;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(20, 20, 20, 0.35);
+  color: inherit;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.vz-touch__btn--light {
+  right: max(26px, calc(env(safe-area-inset-right) + 14px));
+  bottom: max(34px, calc(env(safe-area-inset-bottom) + 20px));
+  /* Обводка кнопки — заряд фонаря (слова партнёра 17.11): тонкое кольцо по краю, его дуга — доля заряда.
+     Рамки нет, размер тот же, что был с рамкой. */
+  width: 90px;
+  height: 90px;
+  border: 0;
+}
+.vz-touch__btn--light::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(rgba(240, 238, 228, 0.82) calc(var(--vz-charge, 100) * 1%), rgba(255, 255, 255, 0.18) 0);
+  /* Маска оставляет только кольцо шириной 4 px: середина кнопки остаётся прежней. */
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  transition: transform 0.18s ease-out;
+}
+.vz-touch__btn--light.is-low::before {
+  background: conic-gradient(#e0362c calc(var(--vz-charge, 100) * 1%), rgba(255, 255, 255, 0.18) 0);
+}
+/* Палец на кнопке (слова партнёра 17.11 08:42: «окружность индикатора зарядки увеличивается (чтобы видно было)»):
+   кольцо больше кнопки и толще — его видно вокруг пальца. 1,55 — чтобы у края экрана оно не срезалось. */
+.vz-touch__btn--light.is-held::before {
+  transform: scale(1.55);
+}
+/* Заряжают: дуга светлая и тёплая и дышит, пока заряд растёт. */
+.vz-touch__btn--light.is-charging::before {
+  background: conic-gradient(#fff3d2 calc(var(--vz-charge, 100) * 1%), rgba(255, 255, 255, 0.22) 0);
+  animation: vz-crank 0.5s ease-in-out infinite;
+}
+@keyframes vz-crank {
+  50% {
+    opacity: 0.68;
+  }
+}
+/* Вспышка полного заряда: кнопка на миг загорается вместе с лучом и за секунду гаснет. */
+.vz-touch__btn--light.is-flash {
+  box-shadow: 0 0 calc(var(--vz-flash, 0) * 46px) calc(var(--vz-flash, 0) * 14px) rgba(255, 246, 220, calc(var(--vz-flash, 0) * 0.85));
+}
+.vz-touch__btn svg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0.5;
+}
+.vz-touch__btn--light.is-lit svg,
+.vz-touch__btn--light.is-dead svg {
+  opacity: 0.95;
+}
+/* Заглох: кнопка зовёт держать на ней палец — подрагивает и светится; кольцо заряда остаётся видно. */
+.vz-touch__btn--light.is-dead {
+  background: rgba(70, 60, 30, 0.55);
+  box-shadow: 0 0 18px 2px rgba(243, 217, 138, 0.45);
+  animation: vz-nudge 0.5s ease-in-out infinite;
+}
+@keyframes vz-nudge {
+  50% {
+    transform: translateX(7px);
+  }
+}
+.vz-touch__btn--pause {
+  left: max(12px, env(safe-area-inset-left));
+  top: calc(max(12px, env(safe-area-inset-top)) + 2.4em);
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border-width: 1px;
+  opacity: 0.7;
+}
+.vz-touch__btn--pause::before,
+.vz-touch__btn--pause::after {
+  content: '';
+  position: absolute;
+  top: 13px;
+  width: 5px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.8);
+}
+.vz-touch__btn--pause::before {
+  left: 13px;
+}
+.vz-touch__btn--pause::after {
+  right: 13px;
+}
+
+/* ── Цели, заряд, действие, сообщения ── */
+.vz-hud__goals {
+  margin-top: 0.9em;
+  max-width: min(78%, 26em);
+  font-size: clamp(13px, 0.9vmin + 9px, 17px);
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.vz-root.is-touch .vz-hud__goals {
+  /* Слева вверху у тача стоят кнопки паузы и задания, справа под временем — заряд фонаря. */
+  margin-left: 58px;
+  max-width: calc(100% - 58px - 7em);
+}
+.vz-hud__goals.is-on {
+  opacity: 0.92;
+}
+.vz-hud__goals-title {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.82em;
+  opacity: 0.6;
+  margin-bottom: 0.25em;
+}
+.vz-hud__goal {
+  padding-left: 1.5em;
+  position: relative;
+}
+.vz-hud__goal::before {
+  content: '';
+  position: absolute;
+  left: 0.15em;
+  top: 0.32em;
+  width: 0.62em;
+  height: 0.62em;
+  border: 1px solid currentColor;
+  box-sizing: border-box;
+  opacity: 0.8;
+}
+.vz-hud__goal.is-done {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.vz-hud__goal.is-done::before {
+  background: currentColor;
+}
+.vz-hud__toast {
+  position: absolute;
+  left: 50%;
+  /* Ниже списка целей: тот занимает верх кадра слева. */
+  top: 34%;
+  transform: translateX(-50%);
+  max-width: min(88%, 32em);
+  text-align: center;
+  font-size: clamp(15px, 1.1vmin + 10px, 20px);
+  letter-spacing: 0.01em;
+  color: #f3e7c2;
+  opacity: 0;
+  transition: opacity 0.35s;
+}
+.vz-hud__toast.is-on {
+  opacity: 0.95;
+}
+.vz-hud__act {
+  position: absolute;
+  left: 50%;
+  bottom: 30%;
+  transform: translateX(-50%);
+  width: min(88%, 34em);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5em;
+  text-align: center;
+  font-size: clamp(15px, 1.1vmin + 10px, 20px);
+  letter-spacing: 0.01em;
+}
+.vz-hud__act.is-on {
+  display: flex;
+}
+/* Обучающая подсказка внизу уступает место подсказке действия и призыву трясти фонарь. */
+.vz-hud__act.is-on ~ .vz-hud__hint,
+.vz-hud.is-shake .vz-hud__hint {
+  opacity: 0;
+  transition: none;
+}
+/* Когда фонарь надо трясти, подсказка действия не мешает. */
+.vz-hud.is-shake .vz-hud__act {
+  display: none;
+}
+.vz-hud__act .vz-hud__bar {
+  visibility: hidden;
+}
+.vz-hud__act .vz-hud__bar.is-on {
+  visibility: visible;
+}
+.vz-hud__bat {
+  position: absolute;
+  left: max(14px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: none;
+  align-items: center;
+  gap: 0.5em;
+  font-size: clamp(12px, 0.9vmin + 8px, 16px);
+  opacity: 0.85;
+}
+.vz-hud__bat.is-on {
+  display: flex;
+}
+.vz-root.is-touch .vz-hud__bat {
+  /* На таче заряд — обводка самой кнопки фонаря: отдельный значок не нужен. */
+  display: none;
+}
+/* Значок фонаря в кольце: дуга кольца — заряд (слова партнёра 17.11). */
+.vz-hud__bat-ring {
+  width: 2.9em;
+  height: 2.9em;
+  color: rgba(240, 238, 228, 0.85);
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+}
+.vz-hud__bat-track,
+.vz-hud__bat-arc {
+  fill: none;
+  stroke-width: 3;
+}
+.vz-hud__bat-track {
+  stroke: rgba(240, 238, 228, 0.18);
+}
+.vz-hud__bat-arc {
+  stroke: rgba(240, 238, 228, 0.85);
+  stroke-linecap: round;
+  stroke-dasharray: 100 100;
+  transition: stroke-dasharray 0.4s linear;
+}
+.vz-hud__bat.is-low .vz-hud__bat-arc {
+  stroke: #e0362c;
+}
+.vz-hud__bat.is-low .vz-hud__bat-ring {
+  animation: vz-blink 1s steps(1) infinite;
+}
+.vz-hud__mark {
+  position: absolute;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  display: none;
+  background:
+    linear-gradient(#f3e7c2, #f3e7c2) left top / 12px 2px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) left top / 2px 12px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) right top / 12px 2px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) right top / 2px 12px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) left bottom / 12px 2px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) left bottom / 2px 12px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) right bottom / 12px 2px no-repeat,
+    linear-gradient(#f3e7c2, #f3e7c2) right bottom / 2px 12px no-repeat;
+  opacity: 0.75;
+}
+.vz-hud__mark.is-on {
+  display: block;
+}
+.vz-hud__mark.is-locked {
+  opacity: 1;
+  transform: scale(0.82);
+  transition: transform 0.2s;
+}
+
+
+@media (max-height: 460px) {
+  .vz-hud__toast {
+    top: 46%;
+  }
+}
+
+/* ── Кнопки действия и задания на таче ── */
+.vz-touch__btn--act {
+  right: max(26px, calc(env(safe-area-inset-right) + 14px));
+  bottom: calc(max(34px, env(safe-area-inset-bottom) + 20px) + 104px);
+  width: 76px;
+  height: 76px;
+  border-color: #f3d98a;
+  color: #f3e7c2;
+  background:
+    radial-gradient(circle, rgba(20, 20, 20, 0.7) 0 60%, transparent 61%),
+    conic-gradient(#f3d98a calc(var(--vz-progress, 0) * 1%), rgba(255, 255, 255, 0.1) 0);
+}
+.vz-touch__btn--act[hidden] {
+  display: none;
+}
+.vz-touch__btn--act svg {
+  opacity: 0.95;
+}
+.vz-touch__btn--goals {
+  left: max(12px, env(safe-area-inset-left));
+  top: calc(max(12px, env(safe-area-inset-top)) + 2.4em + 54px);
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border-width: 1px;
+  opacity: 0.7;
+}
+.vz-touch__btn--goals svg {
+  width: 30px;
+  height: 30px;
+  opacity: 0.9;
+}
+
+/* ── Вспышка воспоминания: строка посреди кадра, появляется рывком и медленно гаснет ── */
+.vz-hud__flash {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  max-width: min(86%, 30em);
+  text-align: center;
+  text-wrap: balance;
+  font-size: clamp(17px, 1.6vmin + 11px, 26px);
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow:
+    1px 0 0 rgba(255, 40, 30, 0.75),
+    -1px 0 0 rgba(40, 200, 255, 0.55),
+    0 0 14px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transition: opacity 1.6s ease-out;
+  pointer-events: none;
+}
+.vz-hud__flash.is-on {
+  opacity: 0.96;
+  transition: none;
+  animation: vz-flash-in 0.5s steps(5, end);
+}
+@keyframes vz-flash-in {
+  0% {
+    opacity: 0;
+    transform: translate(-51%, -50%) skewX(-8deg);
+  }
+  40% {
+    opacity: 1;
+    transform: translate(-49%, -50%) skewX(5deg);
+  }
+  100% {
+    opacity: 0.96;
+    transform: translate(-50%, -50%);
+  }
+}
+/* Сюжет «Невостребованное»: реплики. Под серединой кадра, без дрожи вспышки: это разговор, а не память. Смотритель говорит
+   шрифтом бирок (Geologica), перед строкой — бирка; герой — обычной строкой; чужие голоса и память — курсивом. */
+.vz-hud__say {
+  position: absolute;
+  left: 50%;
+  top: 60%;
+  transform: translate(-50%, -50%);
+  max-width: min(84%, 28em);
+  text-align: center;
+  text-wrap: balance;
+  font-size: clamp(15px, 1.3vmin + 10px, 22px);
+  line-height: 1.35;
+  color: #fff;
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.95), 0 1px 2px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transition: opacity 0.28s ease-out;
+  pointer-events: none;
+}
+.vz-hud__say.is-on {
+  opacity: 0.97;
+}
+.vz-hud__say.is-caretaker {
+  font-family: 'Geologica', system-ui, sans-serif;
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  color: #f1ead6;
+}
+.vz-hud__say.is-caretaker::before {
+  content: '';
+  display: inline-block;
+  width: 0.62em;
+  height: 0.42em;
+  margin-right: 0.55em;
+  border: 1px solid currentColor;
+  border-radius: 1px;
+  vertical-align: 0.12em;
+  opacity: 0.8;
+}
+.vz-hud__say.is-echo,
+.vz-hud__say.is-rita,
+.vz-hud__say.is-memory,
+.vz-hud__say.is-staff {
+  font-style: italic;
+  opacity: 0;
+}
+.vz-hud__say.is-echo.is-on,
+.vz-hud__say.is-rita.is-on,
+.vz-hud__say.is-memory.is-on,
+.vz-hud__say.is-staff.is-on {
+  opacity: 0.86;
+}
+/* Бирка вещи: картонка с отверстием, поля от руки Смотрителя. Сбоку кадра; в лимбо — посреди (is-big). */
+.vz-hud__tag {
+  position: absolute;
+  right: max(3.5%, env(safe-area-inset-right, 0px));
+  top: 24%;
+  width: min(15.5em, 46%);
+  padding: 0.7em 0.9em 0.75em 1.7em;
+  font-family: 'Geologica', system-ui, sans-serif;
+  font-weight: 300;
+  font-size: clamp(11px, 0.9vmin + 7px, 15px);
+  line-height: 1.4;
+  color: #2a2620;
+  background: #e9dfc6;
+  border-radius: 2px;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+  transform: rotate(-1.4deg) translateY(-6px);
+  opacity: 0;
+  transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+  pointer-events: none;
+}
+.vz-hud__tag::before {
+  content: '';
+  position: absolute;
+  left: 0.6em;
+  top: 50%;
+  width: 0.5em;
+  height: 0.5em;
+  margin-top: -0.25em;
+  border-radius: 50%;
+  background: #0b0b0b;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.vz-hud__tag.is-on {
+  opacity: 0.96;
+  transform: rotate(-1.4deg);
+}
+.vz-hud__tag.is-big {
+  right: auto;
+  left: 50%;
+  top: 34%;
+  width: min(19em, 78%);
+  font-size: clamp(13px, 1.2vmin + 9px, 19px);
+  transform: translate(-50%, -50%) rotate(-1.2deg);
+}
+.vz-hud__tag-head {
+  font-size: 0.72em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.vz-hud__tag-name {
+  font-size: 1.12em;
+  font-weight: 400;
+  margin-bottom: 0.3em;
+}
+.vz-hud__tag-row {
+  display: flex;
+  gap: 0.5em;
+  align-items: baseline;
+  border-top: 1px dotted rgba(0, 0, 0, 0.35);
+  padding-top: 0.3em;
+}
+.vz-hud__tag-key {
+  flex: none;
+  font-size: 0.72em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.vz-hud__tag-val {
+  min-width: 0;
+  min-height: 1.4em;
+  overflow-wrap: anywhere;
+}
+.vz-hud__tag-stamp {
+  display: none;
+  margin-top: 0.45em;
+  padding: 0.12em 0.45em;
+  width: fit-content;
+  font-size: 0.74em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8f2018;
+  border: 1.5px solid #8f2018;
+  border-radius: 2px;
+  transform: rotate(-2.5deg);
+  opacity: 0.88;
+}
+.vz-hud__tag.is-stamped .vz-hud__tag-stamp {
+  display: block;
+}
+/* Обрывок старой записи (сюжет, акт II): полоса расшифровки — кто говорит, видно по отступу и курсиву. */
+.vz-meta.vz-meta--tape {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 1em 1.2em 1.1em;
+  font-family: 'Geologica', system-ui, sans-serif;
+  font-weight: 300;
+  font-size: clamp(13px, 1.1vmin + 9px, 18px);
+  line-height: 1.45;
+  color: #e8e4da;
+  background: rgba(14, 14, 15, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+  text-align: left;
+}
+.vz-meta__tape-head {
+  margin-bottom: 0.7em;
+  font-size: 0.72em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.vz-meta__tape-line {
+  margin-top: 0.4em;
+}
+.vz-meta__tape-line.is-memory {
+  padding-left: 1.6em;
+  font-style: italic;
+  opacity: 0.78;
+}
+/* В лимбо, пока на экране бирка, его строки уходят — как при обрывке метаслоя. */
+.vz-hud.is-koma .vz-hud__limbo {
+  opacity: 0;
+}
+/* Телефон стоя: бирка сбоку — под верхней строкой, уже. */
+@media (orientation: portrait) {
+  .vz-hud__tag:not(.is-big) {
+    top: 15%;
+    width: min(13.5em, 58%);
+  }
+}
+
+/* Телефон лёжа: внизу справа — кнопка фонаря (90 px), и широкие строки посреди кадра на неё наезжали (640 × 360:
+   подсказка «трясите» и строки лимбо; размер в матрице смоука с 21.11). Здесь строки уже — между боковыми кнопками. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .vz-root.is-touch .vz-hud__prompt,
+  .vz-root.is-touch .vz-hud__limbo {
+    width: min(88%, 34em, calc(100% - 2 * (102px + max(26px, env(safe-area-inset-right) + 14px))));
+  }
+}
+/* ── Лимбо: тёмные строки на белом ── */
+.vz-hud__limbo {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  width: min(88%, 34em);
+  text-align: center;
+  text-wrap: balance;
+  font-size: clamp(14px, 1.1vmin + 10px, 19px);
+  line-height: 1.7;
+  letter-spacing: 0.03em;
+  color: #1c1c1c;
+  opacity: 0;
+  transition: opacity 1.2s;
+  pointer-events: none;
+}
+.vz-hud__limbo.is-on {
+  opacity: 0.82;
+}
+.vz-hud__limbo > div:nth-child(2) {
+  opacity: 0.6;
+  font-style: italic;
+}
+.vz-hud__limbo > div:nth-child(3) {
+  margin-top: 0.8em;
+  opacity: 0.45;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vz-hud__flash.is-on {
+    animation: none;
+  }
+}
+
+/* ── Светлое пространство: надписи темнеют, иначе они белым по белому ── */
+.vz-hud.is-bright,
+.vz-hud.is-bright .vz-hud__toast,
+.vz-hud.is-bright .vz-hud__hint,
+.vz-hud.is-bright .vz-hud__goal,
+.vz-hud.is-bright .vz-hud__prompt {
+  color: #161616;
+  /* Светлый ореол: в домике и на лугу под строкой бывает и тёмное (пол, ели) — тёмные буквы должны читаться везде. */
+  text-shadow:
+    0 0 3px rgba(255, 255, 255, 0.85),
+    0 0 8px rgba(255, 255, 255, 0.55);
+}
+.vz-hud.is-bright .vz-hud__flash {
+  color: #101010;
+  text-shadow:
+    1px 0 0 rgba(255, 40, 30, 0.6),
+    -1px 0 0 rgba(40, 160, 255, 0.5),
+    0 0 6px rgba(255, 255, 255, 0.8),
+    0 0 14px rgba(255, 255, 255, 0.6);
+}
+.vz-hud.is-bright .vz-hud__mark {
+  filter: invert(1);
+}
+
+
+
+/* ── Обрывок метаслоя (ui/meta_card.ts): в лимбо, посреди кадра, вместо его строк ── */
+.vz-hud.is-meta .vz-hud__limbo {
+  opacity: 0;
+}
+.vz-hud__meta {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  width: min(86%, 21em);
+  opacity: 0;
+  transition: opacity 1.2s ease-out;
+  pointer-events: none;
+  font-family: 'Geologica', system-ui, sans-serif;
+}
+.vz-hud__meta.is-on {
+  opacity: 1;
+  transition: opacity 0.6s ease-in;
+}
+.vz-meta {
+  display: flex;
+  justify-content: center;
+}
+/* Экран телефона: тёмный, без рамок и значков — только то, что на нём осталось. */
+.vz-meta__phone {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1.1em 1.1em 1.2em;
+  border-radius: 1.3em;
+  background: #0d0e10;
+  color: #e9e9e6;
+  font-size: clamp(13px, 0.9vmin + 9px, 16px);
+  line-height: 1.45;
+  box-shadow: 0 0.6em 2.4em rgba(0, 0, 0, 0.35);
+}
+.vz-meta__missed {
+  color: #d7655a;
+  letter-spacing: 0.04em;
+}
+.vz-meta__who {
+  margin-top: 0.5em;
+  font-size: 1.15em;
+}
+.vz-meta__times {
+  margin-top: 0.45em;
+  opacity: 0.55;
+  letter-spacing: 0.06em;
+}
+/* Имя не сохранилось — размытое пятно на его месте. */
+.vz-meta__head {
+  padding-bottom: 0.7em;
+  margin-bottom: 0.9em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+.vz-meta__name {
+  display: inline-block;
+  filter: blur(3.5px);
+  opacity: 0.7;
+  letter-spacing: 0.2em;
+}
+.vz-meta__msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 0.55em;
+}
+.vz-meta__msg--me {
+  align-items: flex-end;
+}
+.vz-meta__bubble {
+  max-width: 85%;
+  padding: 0.5em 0.8em;
+  border-radius: 1em;
+  background: #23252a;
+}
+.vz-meta__msg--me .vz-meta__bubble {
+  background: #34373d;
+}
+.vz-meta__at {
+  margin-top: 0.25em;
+  font-size: 0.75em;
+  opacity: 0.45;
+}
+/* Записка: полоска бумаги, чуть наискось. */
+.vz-meta__note {
+  max-width: 100%;
+  padding: 1em 1.2em;
+  background: #ece6d8;
+  color: #23211d;
+  font-style: italic;
+  font-size: clamp(14px, 1vmin + 10px, 18px);
+  line-height: 1.5;
+  transform: rotate(-1.6deg);
+  box-shadow: 0 0.5em 1.8em rgba(0, 0, 0, 0.28);
+}
+/* Снимок: отпечаток с белым полем. */
+.vz-meta__print {
+  width: 78%;
+  padding: 0.55em 0.55em 1.4em;
+  background: #f1efe9;
+  transform: rotate(1.4deg);
+  box-shadow: 0 0.6em 2em rgba(0, 0, 0, 0.3);
+}
+.vz-meta__img {
+  width: 100%;
+  background-repeat: no-repeat;
+  background-color: #2a2b2a;
+}
+/* Запись с нагрудной камеры: кадр, REC, время. */
+.vz-meta__reel {
+  position: relative;
+  width: 100%;
+  background: #000;
+  box-shadow: 0 0.6em 2.4em rgba(0, 0, 0, 0.35);
+}
+.vz-meta__frame {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+.vz-meta__rec {
+  position: absolute;
+  left: 0.6em;
+  top: 0.45em;
+  color: #fff;
+  font-size: 0.8em;
+  letter-spacing: 0.08em;
+}
+.vz-meta__dot {
+  display: inline-block;
+  width: 0.55em;
+  height: 0.55em;
+  margin-right: 0.4em;
+  border-radius: 50%;
+  background: #e0473b;
+  animation: vz-blink 1.6s steps(1) infinite;
+}
+.vz-meta__tc {
+  position: absolute;
+  right: 0.6em;
+  bottom: 0.45em;
+  color: #fff;
+  font-size: 0.75em;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vz-meta__dot {
+    animation: none;
+  }
+}
+
+/* Сюжет: пелена во весь кадр. Чёрная — обрыв смены (быстро), белая — эпилог (медленно). Реплики и карточки — поверх. */
+.vz-hud__veil {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: #000;
+  pointer-events: none;
+  transition: opacity 0.35s linear;
+  z-index: 4;
+}
+.vz-hud.is-veil-black .vz-hud__veil {
+  opacity: 1;
+}
+.vz-hud.is-veil-white .vz-hud__veil {
+  opacity: 0.94;
+  background: #efece4;
+  transition: opacity 4.5s ease-in;
+}
+.vz-hud__say,
+.vz-hud__tag,
+.vz-hud__meta {
+  z-index: 5;
+}
+.vz-hud.is-veil-white .vz-hud__say {
+  color: #2a2620;
+  text-shadow: none;
+}
+
+/* ── Без плашек (партнёр 24.11: «Все элементы интерфейса должны быть текстом в пространстве, словно это отражение на сетчатке
+   глаза. Никаких плашек, никаких интерфейсов. Либо совсем что-то полупрозрачное и эфемерное») ──
+   Бирка, карточка «известно точно», обрывки метаслоя — только буквы: без фона, рамки, тени и наклона. Буквы светятся, как
+   послесвечение, и едва дышат; снимок и запись — полупрозрачные, с краями, уходящими в ничто. */
+.vz-hud__tag,
+.vz-meta.vz-meta--tape,
+.vz-meta__phone,
+.vz-meta__note,
+.vz-meta__bubble,
+.vz-meta__msg--me .vz-meta__bubble,
+.vz-meta__print,
+.vz-meta__reel {
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+.vz-hud__tag,
+.vz-meta.vz-meta--tape,
+.vz-meta__phone,
+.vz-meta__note {
+  color: rgba(246, 242, 232, 0.9);
+  text-shadow:
+    0 0 0.35em rgba(255, 255, 255, 0.42),
+    0.05em 0 0 rgba(255, 70, 50, 0.22),
+    -0.05em 0 0 rgba(70, 170, 255, 0.2);
+  animation: vz-afterimage 5.5s ease-in-out infinite;
+}
+.vz-hud__tag {
+  padding-left: 0.9em;
+  transform: translateY(-6px);
+}
+.vz-hud__tag::before {
+  display: none;
+}
+.vz-hud__tag.is-on {
+  opacity: 0.92;
+  transform: none;
+}
+.vz-hud__tag.is-big {
+  transform: translate(-50%, -50%);
+}
+.vz-hud__tag-row {
+  border-top: 0;
+}
+.vz-hud__tag-stamp {
+  padding: 0;
+  border: 0;
+  transform: none;
+  color: #ff7a6b;
+}
+.vz-meta__note {
+  transform: none;
+}
+.vz-meta__bubble {
+  padding: 0.12em 0;
+}
+.vz-meta__head {
+  border-bottom: 0;
+}
+.vz-meta__print {
+  padding: 0;
+  transform: none;
+}
+.vz-meta__print .vz-meta__img,
+.vz-meta__frame {
+  opacity: 0.6;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 42%, transparent 76%);
+  mask-image: radial-gradient(ellipse at center, #000 42%, transparent 76%);
+}
+.vz-meta__img {
+  background-color: transparent;
+}
+/* В светлом пространстве буквы тёмные со светлым ореолом — как остальные строки. */
+.vz-hud.is-bright .vz-hud__tag,
+.vz-hud.is-bright .vz-meta.vz-meta--tape,
+.vz-hud.is-bright .vz-meta__phone,
+.vz-hud.is-bright .vz-meta__note {
+  color: rgba(22, 22, 22, 0.88);
+  text-shadow:
+    0 0 0.3em rgba(255, 255, 255, 0.85),
+    0 0 0.8em rgba(255, 255, 255, 0.5);
+}
+.vz-hud.is-bright .vz-hud__tag-stamp {
+  color: #a3261b;
+}
+@keyframes vz-afterimage {
+  0%,
+  100% {
+    filter: blur(0);
+  }
+  50% {
+    filter: blur(0.45px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vz-hud__tag,
+  .vz-meta.vz-meta--tape,
+  .vz-meta__phone,
+  .vz-meta__note {
+    animation: none;
+  }
+}
+
+/* ── Настройки не сжаты (партнёр 24.11: «На экране полно места, чтобы так не сжимать настройки») ── */
+.vz-settings {
+  width: min(720px, calc(100% - 20px));
+  padding: 20px 22px 16px;
+  font-size: 14px;
+}
+.vz-settings__rows {
+  gap: 14px;
+}
+.vz-settings__row {
+  grid-template-columns: 9em minmax(0, 1fr);
+  gap: 4px 18px;
+}
+.vz-settings__label {
+  font-size: 11px;
+}
+.vz-seg__opt {
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+/* Подпись не рвётся посреди слова, но длинная («почти незаметные») переносится по пробелу: в одну строку она вылезала из кнопки
+   (смоук 4b323f2, 800 × 800 и шире: 162 > 133 px). */
+@media (min-width: 520px) {
+  .vz-seg__opt {
+    white-space: normal;
+    overflow-wrap: break-word;
+    text-wrap: balance;
+  }
+}
+.vz-overlay__opt {
+  min-height: 38px;
+  font-size: 13px;
+}
+@media (max-width: 440px) {
+  .vz-settings__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Низкий широкий экран (телефон лёжа): широкие настройки выше перебивали его раскладку — две колонки с подписью сбоку оставляли
+   сегменту по 30 px, и подписи вылезали из кнопок (смоук 6009ed5, 915×412). Здесь — как было: подпись над переключателем, мельче,
+   с переносом. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .vz-settings {
+    width: min(720px, calc(100% - 20px));
+    padding: 12px 16px 10px;
+  }
+  .vz-settings__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .vz-seg__opt {
+    min-height: 30px;
+    padding: 4px 6px;
+    font-size: 12px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ── Титры лентой, как в кино (ui/overlay.ts, creditsRoll) ── */
+.vz-credits {
+  position: relative;
+  /* Лента шире колонки заставки: выходит из неё по середине экрана. */
+  width: min(92vw, 46em);
+  left: 50%;
+  transform: translateX(-50%);
+  height: min(72vh, 44em);
+  overflow: hidden;
+  font-family: 'Geologica', system-ui, sans-serif;
+  font-weight: 300;
+  font-size: clamp(13px, 0.6vmin + 10px, 17px);
+  line-height: 1.5;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16%, #000 84%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16%, #000 84%, transparent 100%);
+}
+.vz-credits__roll {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  animation: vz-roll var(--vz-roll, 90s) linear infinite;
+  will-change: transform;
+}
+.vz-credits.is-held .vz-credits__roll {
+  animation-play-state: paused;
+}
+@keyframes vz-roll {
+  to {
+    transform: translateY(calc(-100% - min(72vh, 44em)));
+  }
+}
+.vz-credits__name {
+  font-size: 2.2em;
+  letter-spacing: 0.42em;
+  margin-right: -0.42em;
+  text-align: center;
+  color: var(--vz-ink);
+  margin-bottom: 5em;
+}
+.vz-credits__name--end {
+  margin: 7em 0 0;
+  font-size: 1.2em;
+  opacity: 0.6;
+}
+.vz-credits__head {
+  margin: 4.2em 0 1.3em;
+  text-align: center;
+  font-size: 0.72em;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--vz-faint);
+}
+.vz-credits__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 1.6em;
+  margin: 0.34em 0;
+}
+.vz-credits__what {
+  text-align: right;
+  color: var(--vz-dim);
+  overflow-wrap: anywhere;
+}
+.vz-credits__who {
+  text-align: left;
+  color: var(--vz-ink);
+  overflow-wrap: anywhere;
+}
+/* Строка без «что»: одно имя посередине. */
+.vz-credits__what:empty {
+  display: none;
+}
+.vz-credits__what:empty + .vz-credits__who {
+  grid-column: 1 / -1;
+  text-align: center;
+}
+.vz-credits__list {
+  text-align: center;
+  color: var(--vz-ink);
+  padding: 0 8%;
+}
+.vz-credits__legal {
+  margin: 7em 6% 0;
+  font-size: 0.6em;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--vz-faint);
+  overflow-wrap: anywhere;
+}
+.vz-credits__legal-head {
+  margin-bottom: 1em;
+}
+.vz-credits__legal-line {
+  margin-top: 0.35em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vz-credits {
+    overflow-y: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .vz-credits__roll {
+    position: static;
+    animation: none;
+  }
+}
+
+/* ── Бирка — бумажный ярлык на нитке у вещи (квиз 24.11, ночь: «Ярлык у вещи»; канон KOMA: «разглаживают одну и ту же бирку») ──
+   Бирку вспомненной вещи и экспоната лимбо hud.tagAt вешает над точкой мира: бумага, дырочка, нитка вниз к вещи, ярлык
+   мельчает с расстоянием (--s). Это вещь мира, а не плашка интерфейса: «без плашек» по-прежнему для всего остального — и для
+   своей бирки героя (посреди кадра, без вещи). */
+.vz-hud__tag.is-pinned {
+  right: auto;
+  width: 12.5em;
+  font-size: clamp(11px, 0.9vmin + 7px, 15px);
+  padding: 0.55em 0.8em 0.6em 1.6em;
+  color: #2a2620;
+  background: linear-gradient(176deg, #e4dac2, #d3c8ac);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+  text-shadow: none;
+  animation: none;
+  transform-origin: 50% 100%;
+  transform: translate(-50%, calc(-100% - 2.4em)) rotate(-2.5deg) scale(var(--s, 1));
+  transition: opacity 0.5s ease-out;
+}
+.vz-hud__tag.is-pinned.is-big {
+  width: 13.5em;
+  font-size: clamp(12px, 1vmin + 8px, 17px);
+  transform: translate(-50%, calc(-100% - 2.4em)) rotate(-1.8deg) scale(var(--s, 1));
+}
+.vz-hud__tag.is-pinned::before {
+  display: block;
+  background: #0b0b0b;
+}
+/* Нитка: от низа ярлыка вниз, к вещи. */
+.vz-hud__tag.is-pinned::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 1px;
+  height: 2.4em;
+  background: linear-gradient(rgba(214, 203, 176, 0.85), rgba(214, 203, 176, 0.15));
+}
+.vz-hud__tag.is-pinned.is-on {
+  opacity: 0.95;
+}
+.vz-hud__tag.is-pinned.is-away {
+  opacity: 0;
+}
+.vz-hud__tag.is-pinned .vz-hud__tag-row {
+  border-top: 1px dotted rgba(0, 0, 0, 0.35);
+}
+.vz-hud__tag.is-pinned .vz-hud__tag-stamp {
+  padding: 0.12em 0.45em;
+  border: 1.5px solid #8f2018;
+  color: #8f2018;
+  transform: rotate(-2.5deg);
+}
+.vz-hud.is-bright .vz-hud__tag.is-pinned {
+  color: #2a2620;
+  text-shadow: none;
+}
+@media (orientation: portrait) {
+  .vz-hud__tag.is-pinned:not(.is-big) {
+    width: 11em;
+  }
+}

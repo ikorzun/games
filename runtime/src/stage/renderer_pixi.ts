@@ -15,7 +15,7 @@
  * left / center / right, offscreen_* не рисуются. Говорящего подсвечивают затемнением остальных
  * (tint), силуэт без собственного файла — чёрный кадр с прозрачностью .85.
  */
-import { Application, Container, defaultFilterVert, GlProgram, Graphics, Rectangle, Sprite, Text, Texture, VideoSource } from 'pixi.js';
+import { Application, Container, defaultFilterVert, detectVideoAlphaMode, GlProgram, Graphics, Rectangle, Sprite, Text, Texture, VideoSource } from 'pixi.js';
 import type { WebGLRenderer } from 'pixi.js';
 import type { ViolenceMode } from '../core/settings';
 import type { SpriteView, TransitionKind, ViewState } from '../core/types';
@@ -356,14 +356,23 @@ export class PixiSceneRenderer implements ISceneRenderer {
       if (this.clip !== clip || clip.tex) return;
       // Текстуру заводим, когда кадры уже идут: VideoSource тогда сам берёт их по requestVideoFrameCallback и не
       // перезапускает загрузку элемента. Каждый новый кадр ролика — один кадр сцены.
-      const source = new VideoSource({ resource: el, autoPlay: false });
-      source.on('update', () => this.invalidate());
-      clip.tex = new Texture({ source });
-      clip.state = 'playing';
-      clip.t0 = performance.now();
-      this.videoPic.texture = clip.tex;
-      this.videoPic.alpha = 0;
-      this.layout();
+      const show = (): void => {
+        if (this.clip !== clip || clip.tex) return;
+        const source = new VideoSource({ resource: el, autoPlay: false });
+        source.on('update', () => this.invalidate());
+        clip.tex = new Texture({ source });
+        clip.state = 'playing';
+        clip.t0 = performance.now();
+        this.videoPic.texture = clip.tex;
+        this.videoPic.alpha = 0;
+        this.layout();
+      };
+      // VideoSource.load() внутри ждёт detectVideoAlphaMode() и только потом читает размеры ролика. Первое такое
+      // ожидание долгое (PixiJS грузит пробный ролик); если за это время кадр сменился и ролик убрали, источник
+      // уже уничтожен, и продолжение load() падает: «Cannot read properties of null (reading 'videoWidth')».
+      // Поэтому источник заводим, когда ответ уже готов: тогда load() доходит до конца в том же такте, и
+      // вклиниться между ними нечему. Ответ один на всё приложение, дальше ожидания нет.
+      void detectVideoAlphaMode().then(show, show);
     });
     el.addEventListener('ended', () => {
       if (this.clip === clip) clip.state = 'ended'; // остаётся последний кадр

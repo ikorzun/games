@@ -1,0 +1,55 @@
+{
+ "_": "Монтаж геймплейного видео (партнёр 21.11, 19:24). Кадры — e2e/out/gameplay/<scene>; номера кадров — от начала куска, 30 к/с. Звуки — public/audio. s6_held — лимбо с удержанной карточкой (tools/video/hold_card.py).",
+ "clips": [
+  {"scene": "s1", "from": 0, "to": 366, "gap": 0,
+   "sfx": [
+    ["amb_bunker_1.mp3", 0, 0.5, {"dur": 6.3, "fade_in": 1.5, "fade_out": 1.0}],
+    ["breath_calm_1.mp3", 0, 0.3, {"dur": 6.0, "fade_out": 1.0}],
+    ["flash_click_1.mp3", 45, 0.9],
+    ["assemble_1.mp3", 47, 0.5],
+    ["step_concrete_1.mp3", 120, 0.42], ["step_concrete_2.mp3", 135, 0.42], ["step_concrete_3.mp3", 150, 0.42],
+    ["step_concrete_4.mp3", 165, 0.42], ["step_concrete_1.mp3", 180, 0.4], ["step_concrete_2.mp3", 195, 0.38],
+    ["step_concrete_3.mp3", 210, 0.36], ["step_concrete_4.mp3", 225, 0.34],
+    ["swarm_cohere_1.mp3", 240, 0.9],
+    ["heartbeat_1.mp3", 250, 0.65],
+    ["swarm_scatter_1.mp3", 318, 0.8],
+    ["amb_bunker_1.mp3", 318, 0.4, {"dur": 1.6, "fade_in": 0.4, "fade_out": 0.5}]
+   ]},
+  {"scene": "s4b", "from": 0, "to": 360, "gap": 8,
+   "bed": ["amb_dunes_1.mp3", 0.55, 0.8, 0.8],
+   "sfx": [
+    ["step_sand_1.mp3", 4, 0.4], ["step_sand_2.mp3", 20, 0.4], ["step_sand_3.mp3", 36, 0.4], ["step_sand_4.mp3", 52, 0.4], ["step_sand_1.mp3", 68, 0.4],
+    ["step_sand_2.mp3", 80, 0.4], ["step_sand_3.mp3", 98, 0.4], ["step_sand_4.mp3", 116, 0.4], ["step_sand_1.mp3", 134, 0.4], ["step_sand_2.mp3", 152, 0.4],
+    ["still_tone_1.mp3", 255, 0.22, {"dur": 3.5, "fade_in": 1.0, "fade_out": 1.0}],
+    ["step_sand_3.mp3", 262, 0.36], ["step_sand_4.mp3", 284, 0.34], ["step_sand_1.mp3", 306, 0.32], ["step_sand_2.mp3", 328, 0.3]
+   ]},
+  {"scene": "s3", "from": 30, "to": 301, "gap": 8,
+   "bed": ["amb_void_1.mp3", 0.3, 0.6, 0.8],
+   "sfx": [
+    ["step_concrete_1.mp3", 6, 0.35], ["step_concrete_2.mp3", 21, 0.35], ["step_concrete_3.mp3", 36, 0.35], ["step_concrete_4.mp3", 51, 0.35],
+    ["step_concrete_1.mp3", 66, 0.35], ["step_concrete_2.mp3", 81, 0.35], ["step_concrete_3.mp3", 96, 0.35], ["step_concrete_4.mp3", 111, 0.35],
+    ["chain_clink_1.mp3", 121, 0.9],
+    ["whiteout_1.mp3", 123, 0.6],
+    ["breath_panic_1.mp3", 130, 0.45]
+   ]},
+  {"scene": "s5", "from": 0, "to": 213, "gap": 8,
+   "bed": ["swarm_loop_1.mp3", 0.4, 0.3, 0.6],
+   "sfx": [
+    ["flash_click_2.mp3", 40, 0.8],
+    ["breath_panic_1.mp3", 50, 0.5],
+    ["heartbeat_1.mp3", 70, 0.6],
+    ["swarm_catch_1.mp3", 140, 1.0],
+    ["signal_static_1.mp3", 143, 0.7]
+   ]},
+  {"scene": "s6_held", "from": 0, "to": 300, "gap": 6,
+   "bed": ["wake_street_1.mp3", 0.28, 1.0, 1.0],
+   "sfx": [
+    ["collapse_1.mp3", 0, 0.55],
+    ["dissolve_1.mp3", 15, 0.45],
+    ["camera_hold_1.mp3", 157, 0.8, {"rate": 0.85}],
+    ["phone_far_1.mp3", 205, 0.3]
+   ]}
+ ],
+ "title": "e2e/out/gameplay/title", "title_gap": 8,
+ "title_sfx": [["still_tone_1.mp3", 0, 0.35, {"dur": 5.0, "fade_in": 0.8, "fade_out": 1.5}]]
+}

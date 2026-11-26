@@ -1,0 +1,3642 @@
+#!/usr/bin/env node
+/**
+ * Смоук-тест собранной игры в настоящем браузере (Chromium, программный WebGL).
+ *
+ *   npm run build && npm run smoke                                   # dist/
+ *   npm run build:playgama && npm run smoke -- --dist dist-playgama  # с настоящим Bridge SDK
+ *   npm run smoke:matrix                                             # + раскладка по матрице размеров, скриншоты в e2e/out/
+ *   npm run smoke -- --url https://…                                 # опубликованная ссылка
+ *
+ * Параметры: --dist <dir> | --url <url>, --matrix, --langs ru,en(,es), --sizes 640x360,…, --no-shots, --shell, --only play,gen,worlds,seam,flats,illusions,session,pockets,koma,fear,audio,frame,touch,bridge,matrix.
+ * Симуляция в тестах заморожена и шагается через window.__vz: проверяется логика и вёрстка, а не
+ * частота кадров (SwiftShader даёт 5–10 к/с). Качество задаётся параметром адреса, иначе по строке
+ * видеокарты выбралось бы «низкое» и тень осталась бы непроверенной.
+ * Браузер: CHROMIUM_PATH (или /opt/pw-browsers/chromium, или `npx playwright-core install chromium`).
+ * Браузеров два, и ведут они себя по-разному. Без пути Playwright берёт chromium-headless-shell — так
+ * идёт CI; /opt/pw-browsers/chromium — полный Chromium, он ближе к браузеру игрока. Разница, на которой
+ * мы уже обжигались: под захватом мыши headless-shell держит курсор в точке (0, 0) и каждое движение
+ * присылает парой «+координата, −координата», а нажатие кнопки — одиночным «−координата». Взгляд в нём
+ * после работы мышью случаен, поэтому проверки картинки выставляют его заново. Перед отправкой
+ * прогоняйте оба: `npm run smoke` и `npm run smoke -- --shell` (тот же браузер, что на CI).
+ * Выход: 0 — всё прошло, 1 — есть провалы, 2 — не запустился браузер.
+ */
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright-core';
+import { preview } from 'vite';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const OUT = join(ROOT, 'e2e', 'out');
+
+const argv = process.argv.slice(2);
+const flag = (name) => argv.includes(`--${name}`);
+const opt = (name, fallback) => {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : fallback;
+};
+const distDir = resolve(ROOT, opt('dist', 'dist'));
+const remoteUrl = opt('url', null);
+const wantMatrix = flag('matrix');
+const wantShots = !flag('no-shots');
+const only = opt('only', null)?.split(',').map((x) => x.trim());
+const wants = (name) => !only || only.includes(name);
+const matrixLangs = opt('langs', 'ru,en').split(',').map((s) => s.trim()).filter(Boolean);
+/** Только эти размеры матрицы (--sizes 640x360,915x412) — для прицельной проверки; по умолчанию все. */
+const matrixSizes = opt('sizes', null)?.split(',').map((s) => s.trim()).filter(Boolean) ?? null;
+
+let passed = 0;
+const failures = [];
+function check(name, ok, details = '') {
+  if (ok) {
+    passed += 1;
+    console.log(`  ok   ${name}`);
+  } else {
+    // Подробности — и в итоговую сводку: по хвосту лога CI должно быть видно не только что упало, но и как.
+    failures.push(`${name}${details ? ` — ${details}` : ''}`);
+    console.log(`  FAIL ${name}${details ? ` — ${details}` : ''}`);
+  }
+}
+const section = (title) => console.log(`\n# ${title}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const R = Math.PI / 180;
+/** Словари интерфейса: ожидаемые тексты берём из locales/, а не пишем в проверки второй раз. */
+const RU = JSON.parse(readFileSync(join(ROOT, 'locales', 'ru', 'ui.json'), 'utf8'));
+const EN = JSON.parse(readFileSync(join(ROOT, 'locales', 'en', 'ui.json'), 'utf8'));
+const ES = JSON.parse(readFileSync(join(ROOT, 'locales', 'es', 'ui.json'), 'utf8'));
+
+async function startServer() {
+  if (remoteUrl) return { url: remoteUrl, close: async () => undefined };
+  // cors: в песочнице iframe без allow-same-origin у страницы «пустой» источник, и модули со стилями
+  // браузер отдаёт ей только с заголовком Access-Control-Allow-Origin (GitHub Pages и CDN его шлют).
+  const server = await preview({ configFile: false, root: ROOT, base: './', logLevel: 'error', build: { outDir: distDir }, preview: { host: '127.0.0.1', port: 4185, strictPort: false, open: false, cors: true } });
+  const url = server.resolvedUrls?.local?.[0];
+  if (!url) throw new Error('vite preview не вернул адрес');
+  return { url, close: () => server.close() };
+}
+
+/** Предустановленный chromium-headless-shell (браузер CI), если он есть на этой машине. */
+function localShell() {
+  const root = '/opt/pw-browsers';
+  if (!existsSync(root)) return undefined;
+  for (const dir of readdirSync(root).filter((d) => d.startsWith('chromium_headless_shell-')).sort().reverse()) {
+    for (const sub of readdirSync(join(root, dir))) {
+      const exe = join(root, dir, sub, 'chrome-headless-shell');
+      if (existsSync(exe)) return exe;
+    }
+  }
+  return undefined;
+}
+
+async function launchBrowser() {
+  // --shell: как на CI. Если своего headless-shell нет, путь не задаётся и Playwright берёт его сам.
+  const executablePath = process.env.CHROMIUM_PATH || (flag('shell') ? localShell() : existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
+  const extra = (process.env.CHROMIUM_ARGS ?? '').split(/\s+/).filter(Boolean);
+  try {
+    return await chromium.launch({ executablePath, headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--mute-audio', ...extra] });
+  } catch (e) {
+    console.error(`Не удалось запустить Chromium: ${e.message}\nУкажите CHROMIUM_PATH или выполните: npx playwright-core install chromium`);
+    process.exit(2);
+  }
+}
+
+/**
+ * Заглушка захвата мыши: игра считает мышь захваченной, а браузер её не захватывает.
+ *
+ * Зачем. В chromium-headless-shell (браузер CI) настоящий захват запускает в самом браузере петлю
+ * синтетических «движений» мыши — десятки тысяч событий в секунду, пока захват держится. Лёгкая
+ * страница успевает их разбирать, а на полном уровне они копятся: за секунды браузер и страница
+ * набирают гигабайты памяти, кадры почти перестают идти, и на длинном сценарии страница падает
+ * («Target crashed»). В полном Chromium и в настоящих браузерах такого нет.
+ *
+ * Поэтому настоящий захват оставлен только там, где проверяется сама мышь (realLock в openPage),
+ * и страница там лёгкая: тестовый коридор на низком качестве. Остальные сценарии ведут игру через
+ * window.__vz, и им хватает заглушки.
+ */
+const FAKE_LOCK = () => {
+  let locked = null;
+  const changed = () => Promise.resolve().then(() => document.dispatchEvent(new Event('pointerlockchange')));
+  Object.defineProperty(Document.prototype, 'pointerLockElement', { configurable: true, get: () => locked });
+  Element.prototype.requestPointerLock = function fakeLock() {
+    locked = this;
+    changed();
+    return Promise.resolve();
+  };
+  Document.prototype.exitPointerLock = function fakeUnlock() {
+    if (locked === null) return;
+    locked = null;
+    changed();
+  };
+};
+
+/** Страница с журналом ошибок, неудачных и внешних запросов. realLock — настоящий захват мыши (см. FAKE_LOCK). */
+async function openPage(browser, baseUrl, query, ctxOpts = {}, onConsole = null, prepare = null, realLock = false) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: 'en-US', ...ctxOpts });
+  if (!realLock) await context.addInitScript(FAKE_LOCK);
+  if (prepare) await prepare(context);
+  const page = await context.newPage();
+  // На CI три прогона идут разом, и SwiftShader под нагрузкой медленный: 30 с по умолчанию на клик по заставке не хватало
+  // (сценарий страха, CI 17.11 на b2f88ef). Ожидания самой игры — свои, длиннее.
+  page.setDefaultTimeout(90000);
+  const origin = new URL(baseUrl).origin;
+  const log = { errors: [], warnings: [], external: [], failed: [] };
+  page.on('console', (m) => {
+    if (m.type() === 'error') log.errors.push(m.text());
+    else if (m.type() === 'warning') log.warnings.push(m.text());
+  });
+  page.on('pageerror', (e) => log.errors.push(`pageerror: ${e.message}`));
+  page.on('requestfailed', (r) => log.failed.push(`${r.url()} ${r.failure()?.errorText ?? ''}`));
+  page.on('response', (r) => {
+    if (r.status() >= 400 && !r.url().endsWith('favicon.ico')) log.failed.push(`HTTP ${r.status()} ${r.url()}`);
+  });
+  page.on('request', (r) => {
+    const u = r.url();
+    if (u.startsWith('data:') || u.startsWith('blob:') || u.startsWith('about:')) return;
+    if (new URL(u).origin !== origin) log.external.push(u);
+  });
+  if (onConsole) page.on('console', onConsole);
+  await page.goto(new URL(query, baseUrl).toString(), { waitUntil: 'load' });
+  await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
+  return { page, context, log };
+}
+
+const vz = (page, fn, arg) => page.evaluate(fn, arg);
+const state = (page) => page.evaluate(() => window.__vz.state());
+/**
+ * Настройки — под шестерёнкой справа вверху, выпадающим списком (слова партнёра 19.11). Открыть список (если закрыт),
+ * закрыть его, прочитать выбранный вариант сегмент-контрола, выбрать вариант. p — страница или кадр iframe.
+ */
+const openSettings = async (p) => {
+  if (!(await p.isVisible('.vz-settings'))) await p.click('.vz-overlay__gear');
+  await p.waitForSelector('.vz-settings', { state: 'visible', timeout: 5000 });
+};
+const closeSettings = async (p) => {
+  if (await p.isVisible('.vz-settings')) await p.click('.vz-overlay__gear');
+};
+const segOn = (p, name) => p.textContent(`.vz-seg--${name} .vz-seg__opt.is-on`).then((x) => x?.trim());
+const segPick = async (p, name, value) => {
+  await openSettings(p);
+  await p.click(`.vz-seg--${name} .vz-seg__opt[data-v="${value}"]`);
+};
+const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+
+/**
+ * Снимок экрана для отчёта (папка e2e/out). Это не проверка, и ждать его стоит дольше обычных 30 с:
+ * на загруженной машине CI кадр программного рендера — например, огромная вещь во весь экран — может
+ * рисоваться десятки секунд, и прогон падал не из-за игры, а из-за картинки для отчёта.
+ *
+ * Перед снимком — дождаться, пока видеокарта дорисует очередь: шаги проверки (`__vz.step` в цикле) ставят
+ * кадры быстрее, чем программный рендер их рисует, и снимок ждал всю очередь — в офисе после проверки
+ * давления это больше трёх минут (CI 17.11, дважды подряд). Чтение пикселей (`__vz.probe`) ждёт видеокарту
+ * без ограничения по времени; после него снимок — один кадр.
+ */
+const saveShot = async (page, name) => {
+  await page.evaluate(() => window.__vz?.probe?.());
+  return page.screenshot({ path: join(OUT, name), timeout: 180000 });
+};
+/** Средняя яркость центральной части сетки 32×18. */
+const center = (grid) => {
+  const out = [];
+  for (let r = 6; r < 12; r++) for (let c = 12; c < 20; c++) out.push(grid[r * 32 + c]);
+  return mean(out);
+};
+/** WebGL-предупреждения, не относящиеся к игре (программный рендер в тестовом браузере). */
+const benign = (w) => /KHR_parallel_shader_compile|GPU stall due to ReadPixels|Automatic fallback to software WebGL/i.test(w);
+
+// ───────────────────────────── сценарии ─────────────────────────────
+
+async function scenarioPlay(browser, baseUrl) {
+  section('Игра на ПК: загрузка, ходьба, фонарь, тряска, пауза, качество');
+
+  // Заставка: по умолчанию английская (игра не следует языку площадки), с ?lang=ru — русская;
+  // предупреждение о вспышках и настройки на месте, выбор запоминается.
+  // На сборке площадки (window.bridge) язык заставки — язык площадки (обязательный шаг 3 Bridge, пункт 3.4.2): там
+  // английского по умолчанию нет, и этот блок не для неё — язык площадки проверяет сценарий Bridge (scenarioBridge).
+  const plainBuild = await (async () => {
+    const t = await openPage(browser, baseUrl, '?q=low&fail=0&touch=0&level=test');
+    const has = await t.page.evaluate(() => !!window.bridge);
+    await t.context.close();
+    return !has;
+  })();
+  if (!plainBuild) console.log('  (сборка площадки: язык заставки — язык площадки; блок «английский по умолчанию» пропущен)');
+  if (plainBuild) {
+    const t = await openPage(browser, baseUrl, '?q=low&fail=0&touch=0&level=test', { locale: 'ru-RU' });
+    const tp = t.page;
+    const lines = await tp.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent));
+    check('без ?lang заставка английская, даже если язык браузера русский', (await tp.textContent('.vz-overlay__title')) === 'DEPRIVATIO' && (await tp.textContent('.vz-overlay__prompt')) === 'Begin' && (await tp.evaluate(() => document.documentElement.lang)) === 'en');
+    // Слова партнёра 19.11: «Оставляем название и сразу под ним про сон и начать играть».
+    check('на заставке — название, под ним строка про сон и «начать»; подзаголовка и строк о вспышках и счёте нет', lines.length === 1 && lines[0] === EN['title.how'] && (await tp.textContent('.vz-overlay__sub')) === '', JSON.stringify(lines));
+    const look = await tp.evaluate(() => {
+      const title = getComputedStyle(document.querySelector('.vz-overlay__title'));
+      const how = getComputedStyle(document.querySelector('.vz-overlay__line--plain'));
+      return { title: title.fontFamily, tw: title.fontWeight, how: Number(how.fontWeight), dm: document.fonts.check('200 40px "Geologica"', 'UNTITLED') && document.fonts.check('300 16px "Geologica"', 'бюро'), thin: document.fonts.check('200 16px "JetBrains Mono"', 'Ag') };
+    });
+    check('название — Geologica 200 (выбор партнёра 25.11), строка про сон — тонкая (шрифты в сборке, загружены, кириллица тоже)', /Geologica/.test(look.title) && look.tw === '200' && look.how <= 300 && look.dm && look.thin, JSON.stringify(look));
+    // Светлячки: точки на холсте за карточкой — есть, но еле заметные.
+    await sleep(1500);
+    const flies = await tp.evaluate(() => {
+      const c = document.querySelector('.vz-fireflies');
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let lit = 0;
+      let top = 0;
+      const hist = new Uint32Array(256);
+      for (let i = 3; i < d.length; i += 4) {
+        if (d[i] > 8) {
+          lit += 1;
+          hist[d[i]] += 1;
+        }
+        top = Math.max(top, d[i]);
+      }
+      // Яркость пыли — по 99,5-му перцентилю светлых пикселей: пыль случайная, и одна-две точки, легшие друг на друга, не в счёт
+      // (смоук CI da419b6: пик 0,62 при задуманных 0,4 — наложение). Сама пыль — не ярче 0,6 белого, наложения — не ярче 0,8.
+      let p995 = 0;
+      for (let v = 255, seen = 0; v > 8; v--) {
+        seen += hist[v];
+        if (seen > lit * 0.005) {
+          p995 = v;
+          break;
+        }
+      }
+      return { lit, top, p995, share: lit / (c.width * c.height) };
+    });
+    check('на фоне заставки пыль из точек: она есть, фона не закрывает, яркость — не больше 0,6 белого (наложения — 0,8)', flies.lit > 0 && flies.share < 0.04 && flies.p995 <= 150 && flies.top <= 205, JSON.stringify(flies));
+    check('настройки спрятаны под шестерёнкой справа вверху; список закрыт', (await tp.isVisible('.vz-overlay__gear')) && !(await tp.isVisible('.vz-settings')) && (await tp.evaluate(() => { const r = document.querySelector('.vz-overlay__gear').getBoundingClientRect(); return r.right > innerWidth - 80 && r.top < 80; })));
+    // Предупреждение о вспышках — тихой строкой у нижнего края (куратор, пачка 50, 308): видно до первой вспышки.
+    const note = await tp.evaluate(() => {
+      const el = document.querySelector('.vz-overlay__note');
+      const r = el.getBoundingClientRect();
+      return { text: el.textContent, bottom: r.bottom, h: innerHeight, title: document.querySelector('.vz-overlay__title').getBoundingClientRect().bottom };
+    });
+    check('предупреждение о вспышках — тихой строкой у нижнего края заставки, ниже названия', note.text === EN['title.warn'] && note.bottom > note.h * 0.8 && note.bottom <= note.h && note.title < note.h * 0.7, JSON.stringify(note));
+    await openSettings(tp);
+    const info = await tp.$$eval('.vz-settings__note', (els) => els.map((e) => e.textContent));
+    check(
+      'в списке — сегменты звука, качества, обзора, яркости, вспышек и языка (у языка — глобус); вспышки: мягкие или почти незаметные (полных нет)',
+      (await Promise.all(['sound', 'quality', 'sens', 'bright', 'flash', 'lang'].map((n) => tp.isVisible(`.vz-seg--${n}`)))).every(Boolean) &&
+        (await tp.$$eval('.vz-seg--flash .vz-seg__opt', (els) => els.map((e) => e.dataset.v).join())) === 'soft,faint' &&
+        (await tp.$$eval('.vz-seg--lang .vz-seg__opt', (els) => els.map((e) => e.dataset.v).join())) === 'ru,en,es' &&
+        (await segOn(tp, 'flash')) === EN['ui.flash.soft'] &&
+        (await segOn(tp, 'lang')) === 'English' &&
+        (await tp.isVisible('.vz-settings__row--lang .vz-settings__globe')) &&
+        info.length === 0,
+      JSON.stringify({ flash: await segOn(tp, 'flash'), lang: await segOn(tp, 'lang'), info }),
+    );
+    // Испанский (слова партнёра 21.11): третий язык в том же сегменте; выбор сразу меняет заставку и язык документа.
+    await segPick(tp, 'lang', 'es');
+    await sleep(200);
+    check('испанский: в сегменте языка — Español; заставка и язык документа испанские', (await segOn(tp, 'lang')) === 'Español' && (await tp.textContent('.vz-overlay__prompt')) === ES['ui.start'] && (await tp.textContent('.vz-overlay__note')) === ES['title.warn'] && (await tp.evaluate(() => document.documentElement.lang)) === 'es', JSON.stringify({ lang: await segOn(tp, 'lang'), prompt: await tp.textContent('.vz-overlay__prompt') }));
+    await segPick(tp, 'flash', 'faint');
+    await segPick(tp, 'lang', 'ru');
+    await sleep(200);
+    const s0 = await state(tp);
+    check('нажатия в списке не начинают игру; выбор сменился (вспышки почти незаметные, язык русский)', s0.screen === 'title' && s0.overlay === 'start' && (await segOn(tp, 'flash')) === 'почти незаметные' && (await segOn(tp, 'lang')) === 'Русский' && (await tp.textContent('.vz-overlay__prompt')) === RU['ui.start'] && (await tp.evaluate(() => document.documentElement.lang)) === 'ru', JSON.stringify({ screen: s0.screen, flash: await segOn(tp, 'flash'), lang: await segOn(tp, 'lang'), prompt: await tp.textContent('.vz-overlay__prompt') }));
+    // Нажатие мимо открытого списка его закрывает и игру не начинает.
+    await tp.click('.vz-overlay', { position: { x: 20, y: 200 } });
+    await sleep(150);
+    const s1 = await state(tp);
+    check('нажатие мимо списка закрывает его и не начинает игру', !(await tp.isVisible('.vz-settings')) && s1.screen === 'title' && s1.overlay === 'start', JSON.stringify({ open: await tp.isVisible('.vz-settings'), screen: s1.screen }));
+    await sleep(300);
+    await tp.reload({ waitUntil: 'load' });
+    await tp.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
+    await openSettings(tp);
+    check('после перезагрузки выбор запомнен: вспышки почти незаметные, язык русский', (await segOn(tp, 'flash')) === 'почти незаметные' && (await segOn(tp, 'lang')) === 'Русский' && (await tp.evaluate(() => document.documentElement.lang)) === 'ru');
+    await segPick(tp, 'lang', 'en');
+    await segPick(tp, 'flash', 'soft');
+    await sleep(200);
+    check('переключатели работают в обе стороны: снова английский и мягкие вспышки', (await segOn(tp, 'lang')) === 'English' && (await segOn(tp, 'flash')) === EN['ui.flash.soft']);
+    // Титры: авторы моделей мебели (полка Sand3D, CC BY 4.0) — простым текстом, без ссылок; нажатие возвращает на заставку.
+    await tp.click('.vz-overlay__opt--credits');
+    await sleep(150);
+    const credits = await tp.$$eval('.vz-credits__row', (els) => els.map((e) => e.textContent ?? ''));
+    const legal = await tp.$$eval('.vz-credits__legal-line', (els) => els.map((e) => e.textContent ?? ''));
+    const links = await tp.$$eval('.vz-overlay a', (els) => els.length);
+    const sc = await state(tp);
+    check('титры лентой: кнопка на заставке, строки «что — чьё», лицензии мелким блоком в конце, ссылок нет, игра не началась', sc.screen === 'title' && credits.length >= 30 && legal.length >= 30 && legal.filter((x) => /CC-BY|CC BY|CC0/.test(x)).length >= 30 && links === 0 && (await tp.textContent('.vz-credits__name')) === EN['ui.title'], JSON.stringify({ n: credits.length, links, screen: sc.screen }));
+    await tp.click('.vz-overlay__prompt');
+    await sleep(150);
+    const sb = await state(tp);
+    check('титры: нажатие возвращает на заставку', sb.screen === 'title' && sb.overlay === 'start' && (await tp.textContent('.vz-overlay__title')) === 'DEPRIVATIO', JSON.stringify({ screen: sb.screen, overlay: sb.overlay }));
+    check('заставка: нет ошибок в консоли', t.log.errors.length === 0, t.log.errors.join(' | ').slice(0, 300));
+    await t.context.close();
+  }
+
+  // Картинка и всё, чему сама мышь не нужна, — на высоком качестве и с заглушкой захвата. Настоящий
+  // захват в браузере CI заваливает страницу событиями мыши (см. FAKE_LOCK); тяжёлая страница
+  // (1280×720, облако точек) разбирать их не успевает, поэтому сама мышь проверяется ниже, на лёгкой.
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=high&fail=0&lang=ru&touch=0&level=test');
+  let st = await state(page);
+  check('первый кадр показан, игра ждёт на стартовом экране', st.overlay === 'start' && st.paused === true, JSON.stringify({ overlay: st.overlay, paused: st.paused }));
+  check('стартовый экран виден и подписан по-русски', (await page.textContent('.vz-overlay__prompt')) === RU['ui.start']);
+  check('язык документа — ru', (await page.evaluate(() => document.documentElement.lang)) === 'ru');
+
+  await page.click('.vz-overlay');
+  await sleep(300);
+  st = await state(page);
+  check('клик по стартовому экрану запускает игру', st.paused === false && st.overlay === 'hidden', JSON.stringify(st.pauseReasons));
+  await vz(page, () => window.__vz.freeze(true));
+
+  // Ходьба: вперёд по коридору, затем в стену.
+  const z0 = st.pos[2];
+  st = await vz(page, () => window.__vz.step(120, { moveZ: 1 }));
+  check('2 секунды вперёд — около 4,3 м по коридору', Math.abs(z0 - st.pos[2] - 4.35) < 0.4, `пройдено ${(z0 - st.pos[2]).toFixed(2)} м`);
+  st = await vz(page, () => window.__vz.step(180, { moveX: 1 }));
+  check('стена останавливает игрока', st.pos[0] > 0.9 && st.pos[0] < 1.1, `x = ${st.pos[0].toFixed(3)}`);
+  st = await vz(page, () => window.__vz.step(60, { moveZ: 1, run: true }));
+  check('бег быстрее шага', Math.hypot(st.vel[0], st.vel[2]) > 3.5, `скорость ${Math.hypot(st.vel[0], st.vel[2]).toFixed(2)}`);
+
+  // Клавиатура: настоящие нажатия проходят через ввод.
+  await page.keyboard.down('KeyS');
+  const before = (await state(page)).pos[2];
+  st = await vz(page, () => window.__vz.tick(60));
+  await page.keyboard.up('KeyS');
+  check('клавиша S (по физическому коду) ведёт назад', st.pos[2] > before + 1, `Δz = ${(st.pos[2] - before).toFixed(2)}`);
+
+  // Камера догоняет луч.
+  await vz(page, () => window.__vz.teleport(0, 0, 3, 0, 0));
+  st = await vz(page, () => window.__vz.step(1, { lookYaw: 0.35 }));
+  const lag = st.aim[0] - st.cam[0];
+  st = await vz(page, () => window.__vz.step(90));
+  check('луч опережает камеру, затем камера его догоняет', lag > 0.2 && Math.abs(st.aim[0] - st.cam[0]) < 0.03, `отставание ${lag.toFixed(3)} → ${(st.aim[0] - st.cam[0]).toFixed(3)}`);
+
+  // Картинка: в луче светло, без фонаря темно, тень что-то меняет.
+  await vz(page, ([y, p]) => window.__vz.teleport(3.6, 0, -7.6, y, p), [25 * R, 2 * R]);
+  await vz(page, () => window.__vz.step(60));
+  const lit = await vz(page, () => window.__vz.probe());
+  await vz(page, () => window.__vz.shadows(false));
+  const noShadow = await vz(page, () => window.__vz.probe());
+  await vz(page, () => window.__vz.shadows(true));
+  let maxDiff = 0;
+  for (let i = 0; i < lit.length; i++) maxDiff = Math.max(maxDiff, noShadow[i] - lit[i]);
+  // Порог центра — с запасом (сплошная картинка даёт здесь около 49,6): в ядре луча сплаты слились,
+  // и поверхность видна сама.
+  check('в центре луча светло, по краям кадра темно', center(lit) > 40 && mean(lit) < center(lit) * 0.6, `центр ${center(lit).toFixed(1)}, среднее ${mean(lit).toFixed(1)}`);
+  check('тень фонаря затемняет часть кадра', maxDiff > 8, `наибольшая разница ${maxDiff.toFixed(1)}`);
+  const info = await vz(page, () => window.__vz.info());
+  // Тестовый коридор — одна сетка: тени, кадр, сведение, дымка, отсвет и пост-обработка — семь вызовов;
+  // ещё по одному на каждую клетку облака точек в кадре (коридор длиной 24 м — четыре-пять клеток).
+  check('мир рисуется малым числом вызовов', info.calls <= 14 && info.triangles > 5000, `${info.calls} вызовов, ${info.triangles} треугольников`);
+  check('внутренний буфер 1280×720 на высоком качестве', info.width === 1280 && info.height === 720, `${info.width}×${info.height}`);
+
+  // Облако точек: мир собран из точек-сплатов, как 3D-скан. В ядре луча они слились — там кадр так же
+  // ярок, как у сплошной картинки; вокруг луча остаются сами точки, и кадр в целом темнее.
+  const dots = await vz(page, () => window.__vz.probeColor());
+  await vz(page, () => window.__vz.scan(false));
+  const solidGrid = await vz(page, () => window.__vz.probe());
+  const solid = await vz(page, () => window.__vz.probeColor());
+  await vz(page, () => window.__vz.scan(true));
+  const dotsAgain = await vz(page, () => window.__vz.probe());
+  check(
+    'мир собран из точек: в ядре луча поверхность собрана, вокруг — россыпь сплатов',
+    Math.abs(center(lit) - center(solidGrid)) < center(solidGrid) * 0.2 && mean(lit) < mean(solidGrid) * 0.9 && dots.dark > solid.dark + 0.015 && info.points > 3000 && info.clouds >= 1,
+    `центр ${center(lit).toFixed(1)} против ${center(solidGrid).toFixed(1)} у сплошной картинки, среднее ${mean(lit).toFixed(1)} против ${mean(solidGrid).toFixed(1)}, тёмных точек кадра ${dots.dark.toFixed(3)} против ${solid.dark.toFixed(3)}, сплатов в кадре ${info.points}, облаков ${info.clouds}`,
+  );
+  check('облако точек выключается и включается обратно: кадр тот же', Math.abs(mean(dotsAgain) - mean(lit)) < 1.5 && Math.abs(center(dotsAgain) - center(lit)) < 3, `среднее ${mean(lit).toFixed(1)} → ${mean(dotsAgain).toFixed(1)}, центр ${center(lit).toFixed(1)} → ${center(dotsAgain).toFixed(1)}`);
+
+  // Память света: мир существует, пока на него светят. Свет погас — место не гаснет разом, а ещё
+  // несколько секунд держится точками, редеет и осыпается; через семь секунд его нет. Шаги — по шесть:
+  // память стареет по игровому времени, но кадры между снимками тоже должны рисоваться.
+  const afterSec = async (seconds) => {
+    for (let i = 0; i < Math.round(seconds * 10); i++) await vz(page, () => window.__vz.step(6));
+    return vz(page, () => window.__vz.probe());
+  };
+  await vz(page, () => window.__vz.toggleLight());
+  const m03 = await afterSec(0.3);
+  const m2 = await afterSec(1.7);
+  const m5 = await afterSec(3);
+  const dark = await afterSec(4);
+  st = await state(page);
+  check('свет погас — место не гаснет разом: через треть секунды оно ещё видно', center(m03) > center(lit) * 0.6, `центр ${center(m03).toFixed(1)} против ${center(lit).toFixed(1)} при свете`);
+  check('без света место редеет: через две секунды темнее, через пять — ещё темнее', center(m03) > center(m2) + 3 && center(m2) > center(m5) + 3, `центр ${center(m03).toFixed(1)} → ${center(m2).toFixed(1)} → ${center(m5).toFixed(1)}`);
+  check('фонарь выключен — через девять секунд в кадре темно, камера поднимает усиление', center(dark) < center(lit) * 0.45 && center(dark) < center(m5) + 1 && st.gain > 3, `центр ${center(dark).toFixed(1)}, усиление ${st.gain.toFixed(2)}`);
+  await vz(page, () => window.__vz.toggleLight());
+  const relit = await afterSec(1.5);
+  check('свет вернулся — место собирается заново', center(relit) > 40, `центр ${center(relit).toFixed(1)}`);
+
+  // Длинная выдержка: без фонаря яркое в кадре тянет след, и при повороте пространство смазывается;
+  // при свете следа нет.
+  const turn = async (yaw) => {
+    for (let i = 0; i < 8; i++) await vz(page, (y) => window.__vz.step(2, { lookYaw: y }), yaw / 8);
+    return vz(page, () => window.__vz.probe());
+  };
+  await vz(page, () => window.__vz.toggleLight());
+  const still = await afterSec(0.4);
+  const smeared = await turn(-0.5);
+  const faded = await afterSec(1);
+  check('без фонаря поворот смазывает кадр: яркое тянет за собой след', mean(smeared) > mean(still) * 1.25, `среднее ${mean(still).toFixed(1)} → ${mean(smeared).toFixed(1)}`);
+  check('след гаснет: через секунду кадр темнее, чем до поворота', mean(faded) < mean(still), `среднее ${mean(faded).toFixed(1)} против ${mean(still).toFixed(1)}`);
+  await vz(page, () => window.__vz.toggleLight());
+  const litStill = await afterSec(1.5);
+  const litTurn = await turn(0.5);
+  check('при свете следа нет: поворот кадр не засвечивает', mean(litTurn) < mean(litStill) * 1.2, `среднее ${mean(litStill).toFixed(1)} → ${mean(litTurn).toFixed(1)}`);
+
+  // Эхо — второй способ видеть: только без фонаря и только на ходу. В темноте стоящий игрок не видит
+  // ничего (щелчок фонаря волну не пускает); шаг пускает волну, и там, где она идёт по стенам и полу,
+  // проступают линии места. Волна уходит — снова темно.
+  await vz(page, () => window.__vz.toggleLight());
+  const quiet = await afterSec(9);
+  st = await state(page);
+  check('в темноте, стоя на месте, игрок волн не пускает: эха нет', st.echo.length === 0 && st.light.state === 'off', `волн ${st.echo.length}, среднее ${mean(quiet).toFixed(1)}`);
+  for (let i = 0; i < 10; i++) await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+  const heard = await vz(page, () => window.__vz.probe());
+  st = await state(page);
+  check(
+    'шаг в темноте пускает волну эха: в кадре проступают линии места',
+    st.echo.some((e) => e.kind === 0 && e.radius > 0.5) && mean(heard) > mean(quiet) + 2 && Math.max(...heard) > Math.max(...quiet) + 15,
+    `волн ${st.echo.length}, среднее ${mean(quiet).toFixed(1)} → ${mean(heard).toFixed(1)}, самое светлое ${Math.max(...quiet).toFixed(0)} → ${Math.max(...heard).toFixed(0)}`,
+  );
+  // Эхо — только на ходу (решение партнёра): замер — и волны гаснут раньше, чем успевают разойтись.
+  st = await vz(page, () => window.__vz.step(90));
+  check('замер в темноте — эхо гаснет: у волн, что ещё живы, силы нет', st.echo.every((e) => e.amp < 0.05), `волн ${st.echo.length}, сила ${st.echo.map((e) => e.amp.toFixed(3)).join(',')}`);
+  const gone = await afterSec(2.5);
+  st = await state(page);
+  check('волна ушла — снова темно', st.echo.length === 0 && mean(gone) < mean(quiet) + 1.2 && Math.max(...gone) < Math.max(...quiet) + 8, `волн ${st.echo.length}, среднее ${mean(gone).toFixed(1)}, самое светлое ${Math.max(...gone).toFixed(0)}`);
+  await vz(page, () => window.__vz.toggleLight());
+  await afterSec(1.8);
+  // Пока светит фонарь, эха нет (решение партнёра): шаги волн не дают, а уже пущенные не светят.
+  for (let i = 0; i < 10; i++) await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+  st = await state(page);
+  check('при горящем фонаре эха нет: шаги волн не дают', st.light.state === 'on' && st.echo.every((e) => e.amp < 0.02), `волн ${st.echo.length}, сила ${st.echo.map((e) => e.amp.toFixed(3)).join(',')}`);
+
+  // Отказ и тряска.
+  await vz(page, () => window.__vz.fail());
+  st = await vz(page, () => window.__vz.step(10));
+  check('фонарь заглох', st.light.state === 'dead' && st.light.intensity < 0.9);
+  check('на экране подсказка «трясите» с полосой прогресса', (await page.isVisible('.vz-hud__prompt')) && (await page.textContent('.vz-hud__prompt-text'))?.includes('мыш') === true);
+  st = await vz(page, () => window.__vz.step(120));
+  check('без тряски фонарь не оживает', st.light.state === 'dead');
+  for (let i = 0; i < 60 && (await state(page)).light.state === 'dead'; i++) {
+    await page.keyboard.press('KeyF');
+    await vz(page, () => window.__vz.tick(6));
+  }
+  check('запасной способ: стучать клавишей F', (await state(page)).light.state === 'on');
+  check('фонарь ожил — подсказка убрана', !(await page.isVisible('.vz-hud__prompt')));
+
+  // Качество и язык.
+  await vz(page, () => window.__vz.quality('low'));
+  const low = await vz(page, () => window.__vz.info());
+  check('низкое качество: буфер 640×360', low.width === 640 && low.height === 360, `${low.width}×${low.height}`);
+  // После клавиш и кликов взгляд в тестовом браузере может стоять как угодно — выставляем заново.
+  await vz(page, ([y, p]) => window.__vz.teleport(3.6, 0, -7.6, y, p), [25 * R, 2 * R]);
+  await vz(page, () => window.__vz.step(30));
+  const lowGrid = await vz(page, () => window.__vz.probe());
+  check('на низком качестве картинка есть', center(lowGrid) > 30, `центр ${center(lowGrid).toFixed(1)}`);
+  await vz(page, () => window.__vz.quality('high'));
+  // Ультра — высокое качество с зерном и точками вдвое мельче. Насколько мельче, решает экран: в окне
+  // 1280×720 мельче некуда (буфер тот же), в окне 1600×900 — на четверть, и точек в кадре больше.
+  await vz(page, () => window.__vz.step(20));
+  const high = await vz(page, () => window.__vz.info());
+  await vz(page, () => window.__vz.quality('ultra'));
+  const same = await vz(page, () => window.__vz.info());
+  await page.setViewportSize({ width: 1600, height: 900 });
+  // Новый размер приходит с ResizeObserver, а тот — с кадром: под программной отрисовкой (и с тяжёлым кадром) 400 мс не всегда
+  // хватает (смоук 25.11 вечером: буфер остался 1280×720). Ждём, пока размер дойдёт, — до 6 с.
+  for (let t = 0; t < 6000; t += 200) {
+    await sleep(200);
+    if ((await vz(page, () => window.__vz.info())).width === 1600) break;
+  }
+  await vz(page, () => window.__vz.step(20));
+  const fine = await vz(page, () => window.__vz.info());
+  const fineGrid = await vz(page, () => window.__vz.probe());
+  check(
+    'ультра: в малом окне буфер как у высокого, в большом — крупнее, зерно мельче, точек больше, картинка есть',
+    high.fine === 1 && same.quality === 'ultra' && same.fine === 1 && same.width === 1280 && same.height === 720 && fine.width === 1600 && fine.height === 900 && fine.fine === 1.25 && fine.points > high.points * 1.2 && center(fineGrid) > 30,
+    `высокое ${high.width}×${high.height}, точек ${high.points}; ультра ${same.width}×${same.height} → ${fine.width}×${fine.height}, мелкость ${fine.fine}, точек ${fine.points}, центр ${center(fineGrid).toFixed(1)}`,
+  );
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await sleep(400);
+  await vz(page, () => window.__vz.quality('high'));
+  await vz(page, () => window.__vz.lang('en'));
+  check('смена языка на лету: REC/CAM и документ', (await page.textContent('.vz-hud__cam')) === 'CAM-07' && (await page.evaluate(() => document.documentElement.lang)) === 'en');
+  check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
+
+  // Потеря графического контекста.
+  await vz(page, () => window.__vz.freeze(false));
+  await vz(page, () => window.__vz.loseContext(250));
+  // Контекст возвращается через четверть секунды, но пересборка шейдеров на программном рендере идёт
+  // от долей секунды до нескольких: ждём самого события (пауза игрока осталась, причины «context»
+  // уже нет), а не срок — на медленной машине фиксированной секунды не хватало.
+  await page
+    .waitForFunction(
+      () => {
+        const r = window.__vz.state().pauseReasons;
+        return r.includes('user') && !r.includes('context');
+      },
+      null,
+      { timeout: 30000 },
+    )
+    .catch(() => undefined);
+  st = await state(page);
+  check('потеря контекста ставит паузу, после восстановления её можно снять', st.pauseReasons.includes('context') === false && st.paused === true, JSON.stringify(st.pauseReasons));
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, ([y, p]) => window.__vz.teleport(3.6, 0, -7.6, y, p), [25 * R, 2 * R]);
+  await vz(page, () => window.__vz.step(30));
+  const after = await vz(page, () => window.__vz.probe());
+  check('после восстановления контекста картинка вернулась', center(after) > 48, `центр ${center(after).toFixed(1)}`);
+
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  const warns = log.warnings.filter((w) => !benign(w));
+  check('нет предупреждений в консоли', warns.length === 0, warns.join(' | ').slice(0, 400));
+  check('нет внешних запросов', log.external.length === 0, log.external.join(', ').slice(0, 300));
+  check('нет неудачных запросов', log.failed.length === 0, log.failed.join(', ').slice(0, 300));
+  await context.close();
+
+  // Сама мышь: тряска, пауза, потеря и возврат захвата. Захват здесь настоящий, а страница лёгкая
+  // (низкое качество): поток событий захваченной мыши в браузере CI она разбирать успевает.
+  {
+    const m = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&level=test', {}, null, null, true);
+    const mp = m.page;
+    await mp.click('.vz-overlay');
+    await sleep(300);
+    st = await state(mp);
+    const locked = await mp.evaluate(() => document.pointerLockElement !== null);
+    check('клик по стартовому экрану захватывает мышь по-настоящему, игра идёт', st.paused === false && locked, JSON.stringify({ paused: st.paused, locked, reasons: st.pauseReasons }));
+    await vz(mp, () => window.__vz.freeze(true));
+    await vz(mp, () => window.__vz.fail());
+    st = await vz(mp, () => window.__vz.step(10));
+    const wasDead = st.light.state === 'dead' && (await mp.isVisible('.vz-hud__prompt'));
+    // Настоящая тряска мышью: быстрые развороты.
+    await mp.mouse.move(640, 360);
+    await mp.mouse.down();
+    for (let i = 0; i < 44; i++) {
+      await mp.mouse.move(640 + (i % 2 === 0 ? 90 : -90), 360, { steps: 3 });
+      await vz(mp, () => window.__vz.tick(5));
+      if ((await state(mp)).light.state === 'on') break;
+    }
+    await mp.mouse.up();
+    st = await state(mp);
+    check('тряска мышью оживляет фонарь', wasDead && st.light.state === 'on', `состояние ${st.light.state}, прогресс ${st.light.revive.toFixed(2)}`);
+    check('подсказка убрана', !(await mp.isVisible('.vz-hud__prompt')));
+
+    // Пауза клавишей P и возврат кликом.
+    await vz(mp, () => window.__vz.freeze(false));
+    await mp.keyboard.press('KeyP');
+    await mp.waitForFunction(() => window.__vz.state().overlay === 'paused', null, { timeout: 15000 }).catch(() => undefined);
+    st = await state(mp);
+    check('P ставит на паузу, экран паузы виден', st.paused === true && st.overlay === 'paused');
+    const tPaused = st.time;
+    await sleep(500);
+    check('на паузе игровое время стоит', (await state(mp)).time === tPaused);
+    await mp.click('.vz-overlay');
+    await sleep(300);
+    check('клик возвращает в игру', (await state(mp)).paused === false);
+
+    // Захват мыши не дался один раз: Chrome около секунды после Esc отклоняет повторный захват. Игра
+    // не должна решить, что захвата нет вовсе, — она возвращает паузу, и следующий клик пробует снова.
+    await mp.evaluate(() => document.exitPointerLock());
+    await mp.waitForFunction(() => window.__vz.state().overlay === 'paused', null, { timeout: 15000 }).catch(() => undefined);
+    await mp.evaluate(() => {
+      const real = Element.prototype.requestPointerLock;
+      Element.prototype.requestPointerLock = function refuseOnce() {
+        Element.prototype.requestPointerLock = real;
+        return Promise.reject(new DOMException('The user has exited the lock before this request was completed.', 'SecurityError'));
+      };
+    });
+    await mp.click('.vz-overlay');
+    await sleep(400);
+    st = await state(mp);
+    check('отказ в захвате мыши возвращает паузу, а не переводит в режим зажатой кнопки', st.paused === true && st.overlay === 'paused' && st.drag === false, JSON.stringify({ paused: st.paused, overlay: st.overlay, drag: st.drag, reasons: st.pauseReasons }));
+    await mp.click('.vz-overlay');
+    await sleep(400);
+    st = await state(mp);
+    const relocked = await mp.evaluate(() => document.pointerLockElement !== null);
+    check('следующий клик захватывает мышь, игра идёт', st.paused === false && relocked && st.drag === false, JSON.stringify({ paused: st.paused, locked: relocked, drag: st.drag, reasons: st.pauseReasons }));
+
+    check('страница с настоящей мышью: нет ошибок в консоли', m.log.errors.length === 0, m.log.errors.join(' | ').slice(0, 400));
+    const mouseWarns = m.log.warnings.filter((w) => !benign(w));
+    check('страница с настоящей мышью: нет предупреждений в консоли', mouseWarns.length === 0, mouseWarns.join(' | ').slice(0, 400));
+    await m.context.close();
+  }
+}
+
+/** Миры: кнопка «Место» на заставке, офис со светом от датчиков, жёлтые комнаты. */
+async function scenarioWorlds(browser, baseUrl) {
+  section('Миры: место на заставке, офис, жёлтые комнаты');
+
+  // Заставка: кнопка листает место, уровень пересобирается сразу, выбор запоминается.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113');
+    const place = () => page.textContent('.vz-overlay__opt--place').then((x) => x?.trim());
+    const world = async () => (await vz(page, () => window.__vz.level())).world;
+    await openSettings(page);
+    check('на заставке кнопка «Место» (в списке настроек), по умолчанию — убежище', (await page.isVisible('.vz-overlay__opt--place')) && (await place()) === RU['ui.place.shelter'] && (await world()) === 'shelter', `«${await place()}», мир ${await world()}`);
+    await page.click('.vz-overlay__opt--place');
+    let lvl = await vz(page, () => window.__vz.level());
+    let st = await state(page);
+    check(
+      'нажатие меняет место на офис и не начинает игру; уровень пересобран: один этаж с лифтом и отделом',
+      (await place()) === RU['ui.place.office'] && lvl.world === 'office' && st.screen === 'title' && st.overlay === 'start' && lvl.tiers === 1 && lvl.rooms.some((r) => r.type === 'department') && lvl.rooms.some((r) => r.type === 'lift'),
+      `«${await place()}», мир ${lvl.world}, экран ${st.screen}, ярусов ${lvl.tiers}`,
+    );
+    await page.click('.vz-overlay__opt--place');
+    lvl = await vz(page, () => window.__vz.level());
+    check('ещё раз — жёлтые комнаты: пустые залы вместо кабинетов', (await place()) === RU['ui.place.yellow'] && lvl.world === 'yellow' && lvl.rooms.filter((r) => r.type === 'hall').length >= 5, `«${await place()}», мир ${lvl.world}`);
+    // Профиль пишется по очереди: даём записи дойти до хранилища.
+    await sleep(400);
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
+    check('после перезагрузки место запомнено', (await place()) === RU['ui.place.yellow'] && (await world()) === 'yellow', `«${await place()}», мир ${await world()}`);
+    await openSettings(page);
+    await page.click('.vz-overlay__opt--place');
+    {
+      // Зал ожидания — локация основной модели (docs/vylazka/station.md): время идёт, только пока идёшь.
+      const lv = await vz(page, () => window.__vz.level());
+      const fl = await vz(page, () => window.__vz.flow());
+      const types = lv.rooms.map((r) => r.type);
+      check('ещё раз — зал ожидания: зал под стеклянной крышей, касса, камеры хранения, буфет, перрон и пути; у места свой ход времени', (await place()) === RU['ui.place.station'] && lv.world === 'station' && ['vestibule', 'concourse', 'tickets', 'lockers', 'buffet', 'platform', 'track'].every((x) => types.includes(x)) && fl !== null && fl.frozen === true, `«${await place()}», мир ${lv.world}, ${types.join(' ')}`);
+    }
+    await page.click('.vz-overlay__opt--place');
+    check('по кругу — снова убежище', (await place()) === RU['ui.place.shelter'] && (await world()) === 'shelter', `«${await place()}», мир ${await world()}`);
+    // На паузе места не сменить: кнопки нет. Ждём не по сроку, а по делу: после смены места уровень
+    // пересобирается, и на медленной машине игра начинается позже. Открытый список сначала закрывается.
+    await closeSettings(page);
+    await page.click('.vz-overlay');
+    await page.waitForFunction(() => window.__vz.state().overlay === 'hidden' && window.__vz.state().paused === false, null, { timeout: 20000 }).catch(() => {});
+    await page.keyboard.press('KeyP');
+    await page.waitForFunction(() => window.__vz.state().paused === true, null, { timeout: 10000 }).catch(() => {});
+    st = await state(page);
+    await openSettings(page);
+    check('посреди вылазки место не сменить: на паузе в списке настроек кнопки «Место» нет', st.paused === true && (await page.isVisible('.vz-settings')) && !(await page.isVisible('.vz-overlay__opt--place')), `пауза ${st.paused}`);
+    await closeSettings(page);
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    await context.close();
+  }
+
+  // Офис: свет дают потолочные панели — там, где игрок; рядом с Осыпью они гаснут.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=office');
+    check('с ?world=office заставка показывает офис', (await page.textContent('.vz-overlay__opt--place'))?.trim() === RU['ui.place.office']);
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    const afterSec = async (seconds, input) => {
+      for (let i = 0; i < Math.round(seconds * 10); i++) await vz(page, (inp) => window.__vz.step(6, inp ?? undefined), input ?? null);
+      return vz(page, () => window.__vz.probe());
+    };
+    // Датчики теряют того, кто замер (через ~3 с панели гаснут). Пока проверяется обычный свет, игрок
+    // «жив»: чуть-чуть ведёт взглядом, не сходя с места.
+    const wiggle = { lookYaw: 0.0005 };
+    await afterSec(4, wiggle);
+    let st = await state(page);
+    const lvl = await vz(page, () => window.__vz.level());
+    check('офис: вылазка началась у лифта, мир — офис, над игроком горит панель', st.world === 'office' && st.where === 'main' && st.ambientLocal > 0.9 && Math.hypot(st.pos[0] - lvl.spawn[0], st.pos[2] - lvl.spawn[2]) < 1.5, JSON.stringify({ world: st.world, amb: st.ambientLocal }));
+    check('свет — только вокруг игрока: освещено меньше трети клеток этажа', !!st.lights && st.lights.lit >= 2 && st.lights.lit < st.lights.total / 3, JSON.stringify(st.lights));
+    // Фонаря в офисе нет: светит потолок, кнопка фонаря ничего не меняет.
+    const lit = await afterSec(1, wiggle);
+    check('в офисе фонаря нет: hasLight ложь, луч не светит', st.hasLight === false && st.light.intensity === 0, JSON.stringify({ hasLight: st.hasLight, light: st.light }));
+    await vz(page, () => window.__vz.toggleLight());
+    const litAfter = await afterSec(2.5, wiggle);
+    const litColor = await vz(page, () => window.__vz.probeColor());
+    st = await state(page);
+    check('в офисе светло от потолка; кнопка фонаря ничего не меняет: луча как не было, кадр прежний', st.light.intensity === 0 && mean(litAfter) > 60 && Math.abs(mean(litAfter) - mean(lit)) < 0.15 * mean(lit), `среднее ${mean(lit).toFixed(1)} → ${mean(litAfter).toFixed(1)}, луч ${st.light.intensity}`);
+    check('свет офиса белый, без жёлтого и красного оттенка', Math.abs(litColor.r - litColor.b) < 0.08 * Math.max(litColor.r, litColor.b), JSON.stringify(litColor));
+    check('под горящей панелью без фонаря не «темно»: счётчик темноты стоит', st.dark.for === 0 && st.dark.shifts === 0, JSON.stringify(st.dark));
+    // Свет идёт за игроком.
+    const lit0 = litAfter;
+    const node0 = st.node;
+    await afterSec(7, { moveZ: 1 });
+    st = await state(page);
+    check('игрок ушёл по коридору — свет ушёл с ним: над ним горит, освещена по-прежнему малая часть этажа', st.node !== node0 && st.ambientLocal > 0.9 && st.lights.lit < st.lights.total / 3, JSON.stringify({ node: [node0, st.node], amb: st.ambientLocal, lights: st.lights }));
+    // Датчики движения: замер — панели гаснут (3,2 + 1 + 0,5 с), пошевелился — загораются.
+    await afterSec(1, wiggle);
+    st = await state(page);
+    const litBefore = await vz(page, () => window.__vz.probe());
+    check('пока игрок шевелится, неподвижность не копится', st.stillFor < 0.5 && st.lights.lit >= 2, JSON.stringify({ still: st.stillFor, lights: st.lights }));
+    await afterSec(2.2);
+    st = await state(page);
+    check('замер на две секунды — панели ещё горят, неподвижность растёт', st.stillFor > 1.8 && st.lights.lit >= 2, JSON.stringify({ still: st.stillFor, lights: st.lights }));
+    const stillDark = await afterSec(4);
+    st = await state(page);
+    check('замер надолго (ни шага, ни взгляда) — все панели погасли', st.stillFor > 5.5 && st.lights.lit === 0, JSON.stringify({ still: st.stillFor, lights: st.lights }));
+    check('кадр потемнел, место осыпается: счётчик темноты пошёл', mean(stillDark) < mean(litBefore) * 0.4 && st.dark.for > 0, `среднее ${mean(litBefore).toFixed(1)} → ${mean(stillDark).toFixed(1)}, темно ${st.dark.for.toFixed(1)} с`);
+    const woke = await afterSec(1.5, wiggle);
+    st = await state(page);
+    check('пошевелился — панели загорелись, кадр светлый', st.stillFor < 0.5 && st.lights.lit >= 2 && mean(woke) > mean(stillDark) * 2 && mean(woke) > 0.6 * mean(lit0), JSON.stringify({ still: st.stillFor, lights: st.lights, mean: mean(woke).toFixed(1) }));
+
+    // Осыпь рядом — панели гаснут.
+    await vz(page, () => window.__vz.calm(false));
+    const came = await vz(page, () => window.__vz.swarm('release', 3));
+    // Она идёт к игроку; как только подошла на клетку — свет над ним гаснет.
+    for (let i = 0; i < 200 && st.ambientLocal > 0.1 && st.jump?.cause !== 'caught'; i++) st = await vz(page, (w) => window.__vz.step(6, w), wiggle);
+    // Кадр и экспозиция глаза успевают за светом не сразу: даём полсекунды.
+    for (let i = 0; i < 5 && st.jump?.cause !== 'caught'; i++) st = await vz(page, (w) => window.__vz.step(6, w), wiggle);
+    const dark = await vz(page, () => window.__vz.probe());
+    // Темноту решает игра — свет панелей над игроком. Яркость кадра здесь не мерило: вплотную к Осыпи камеру
+    // рвут помехи (серая рябь, тем сильнее, чем она ближе), и среднее кадра скачет от прогона к прогону (CI 17.11:
+    // 70 и 158 при той же темноте). Кадр — в e2e/out, смотреть глазами.
+    await saveShot(page, 'world_office_swarm_dark.png');
+    check('Осыпь подошла — панели вокруг неё гаснут, у игрока темно', came && st.ambientLocal < 0.1, `свет над игроком ${st.ambientLocal.toFixed(2)}, среднее кадра ${mean(lit).toFixed(1)} → ${mean(dark).toFixed(1)}, Осыпь ${st.swarm.mode}`);
+    await vz(page, () => window.__vz.calm(true));
+    st = await stepUntil(page, (x) => x.jump === null, 10, 30);
+    // Воспоминание — из офисного набора.
+    await vz(page, () => window.__vz.reveal());
+    st = await vz(page, () => window.__vz.step(10));
+    const active = st.session.memories.find((m) => m.state === 'active');
+    // Вещи офиса идут цепочкой (systems/session.ts, OFFICE_CHAIN): у всех id начинается на of_, первая — терминал.
+    check('воспоминание в офисе — офисное, первое в цепочке, со своей строкой', !!active && active.id === 'of_terminal' && (await page.textContent('.vz-hud__flash')) === RU[`mem.${active.id}.flash`], JSON.stringify(active));
+    check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
+    // Давление: потолок помещения опускается, камера пригибается сама; вышел — отпускает.
+    {
+      const info = await vz(page, () => window.__vz.pressure());
+      const lv = await vz(page, () => window.__vz.level());
+      const room = info.rooms.map((id) => lv.rooms.find((r) => r.id === id)).filter(Boolean).sort((a, b) => b.cells - a.cells)[0];
+      await vz(page, (id) => window.__vz.gotoRoom(id, 0), room.id);
+      await vz(page, () => window.__vz.step(6));
+      const started = await vz(page, () => window.__vz.pressure('squeeze'));
+      // Оглядываемся, чтобы датчики офиса не гасили свет.
+      for (let i = 0; i < 70; i++) await vz(page, (d) => window.__vz.step(6, { lookYaw: d }), i % 2 ? 0.03 : -0.03);
+      const mid = await vz(page, () => window.__vz.pressure());
+      check('офис: потолок помещения опускается, камера пригибается под ним', started.ok === true && mid.active?.kind === 'squeeze' && mid.active.ceil < 1.9 && mid.camDrop > 0.02, JSON.stringify({ ok: started.ok, ceil: mid.active?.ceil, camDrop: mid.camDrop }));
+      const out = lv.rooms.find((r) => r.type === 'corridor');
+      await vz(page, (id) => window.__vz.gotoRoom(id, 0), out.id);
+      for (let i = 0; i < 80; i++) await vz(page, (d) => window.__vz.step(6, { lookYaw: d }), i % 2 ? 0.03 : -0.03);
+      const after = await vz(page, () => window.__vz.pressure());
+      const st4 = await state(page);
+      check('вышел — потолок отпустил: события нет, камера на своей высоте, никто не проснулся', after.active === null && after.camDrop === 0 && st4.jump === null, JSON.stringify({ active: after.active, camDrop: after.camDrop, jump: st4.jump }));
+    }
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    if (wantShots) {
+      mkdirSync(OUT, { recursive: true });
+      await saveShot(page, 'world_office.png');
+    }
+    await context.close();
+  }
+
+  // Жёлтые комнаты: темно, как в убежище; светит только фонарь, и стена в его луче жёлтая.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=yellow');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    for (let i = 0; i < 40; i++) await vz(page, () => window.__vz.step(6));
+    let st = await state(page);
+    const lvl = await vz(page, () => window.__vz.level());
+    check('жёлтые комнаты: ламп, которые светят, нет (lights пусто), фонарь есть', st.world === 'yellow' && st.lights === null && st.hasLight === true, JSON.stringify({ world: st.world, lights: st.lights, hasLight: st.hasLight }));
+    // Зал без экранов и проекций: ищем тот, где без фонаря кадр темнее всего по всем сторонам.
+    const halls = lvl.rooms.filter((r) => r.type === 'hall');
+    await vz(page, () => window.__vz.toggleLight());
+    let darkest = null;
+    for (const h of halls.slice(0, 4)) {
+      let worst = 0;
+      for (const yaw of [0, 90, 180, 270]) {
+        await vz(page, ([r, y]) => window.__vz.gotoRoom(r, y), [h.id, yaw]);
+        for (let i = 0; i < 25; i++) await vz(page, () => window.__vz.step(6));
+        worst = Math.max(worst, mean(await vz(page, () => window.__vz.probe())));
+      }
+      if (!darkest || worst < darkest.worst) darkest = { room: h.id, worst };
+    }
+    st = await state(page);
+    check('без фонаря в жёлтых комнатах темно: ни одна сторона зала не светла (как в убежище, около 12)', !!darkest && darkest.worst < 20 && st.light.state === 'off', `самая светлая сторона самого тёмного зала: ${darkest?.worst.toFixed(1)}`);
+    await vz(page, ([r]) => window.__vz.gotoRoom(r, 0), [darkest.room]);
+    for (let i = 0; i < 25; i++) await vz(page, () => window.__vz.step(6));
+    const dark0 = mean(await vz(page, () => window.__vz.probe()));
+    await vz(page, () => window.__vz.toggleLight());
+    // Луч на стену: смотрим по сторонам, пока не найдём ближнюю.
+    let best = null;
+    for (const yaw of [0, 90, 180, 270]) {
+      await vz(page, ([r, y]) => window.__vz.gotoRoom(r, y), [darkest.room, yaw]);
+      for (let i = 0; i < 12; i++) await vz(page, () => window.__vz.step(6));
+      const s2 = await state(page);
+      if (!best || s2.beamDist < best.d) best = { yaw, d: s2.beamDist };
+    }
+    await vz(page, ([r, y]) => window.__vz.gotoRoom(r, y), [darkest.room, best.yaw]);
+    for (let i = 0; i < 15; i++) await vz(page, () => window.__vz.step(6));
+    const grid = await vz(page, () => window.__vz.probe());
+    const color = await vz(page, () => window.__vz.probeColor());
+    check('с фонарём стена в луче светлая и жёлтая: красного и зелёного заметно больше синего', mean(grid) > dark0 + 10 && color.r > color.b * 1.3 && color.g > color.b * 1.15, `среднее ${dark0.toFixed(1)} → ${mean(grid).toFixed(1)}, цвет ${JSON.stringify(color)}, стена в ${best.d.toFixed(1)} м`);
+    // Давление: пол зала рассыпается; кто остался стоять — падает и просыпается там, где начал.
+    {
+      const info = await vz(page, () => window.__vz.pressure());
+      const hall = info.rooms.map((id) => lvl.rooms.find((r) => r.id === id)).filter(Boolean).sort((a, b) => b.cells - a.cells)[0];
+      await vz(page, (id) => window.__vz.gotoRoom(id, 0), hall.id);
+      await vz(page, () => window.__vz.step(6));
+      const started = await vz(page, () => window.__vz.pressure('collapse'));
+      let fell = false;
+      let woke = null;
+      for (let i = 0; i < 400 && !woke; i++) {
+        const r = await vz(page, () => {
+          const s2 = window.__vz.step(6);
+          const p = window.__vz.pressure();
+          return { falling: p.falling, radius: p.active?.radius ?? 0, jump: s2.jump };
+        });
+        if (r.falling >= 0) fell = true;
+        if (r.jump) woke = r.jump;
+      }
+      check('жёлтые комнаты: пол зала рассыпался под стоящим — упал и проснулся', started.ok === true && started.active?.phase === 'warn' && fell && woke?.cause === 'caught' && woke?.dest === 'start', JSON.stringify({ ok: started.ok, fell, woke }));
+      for (let i = 0; i < 80; i++) await vz(page, () => window.__vz.step(6));
+      const end = await vz(page, () => window.__vz.pressure());
+      const st3 = await state(page);
+      check('после пробуждения — снова в начале, пол на месте', end.active === null && end.falling < 0 && Math.hypot(st3.pos[0] - lvl.spawn[0], st3.pos[2] - lvl.spawn[2]) < 1, JSON.stringify({ active: end.active, pos: st3.pos.map((v) => +v.toFixed(1)), spawn: lvl.spawn.map((v) => +v.toFixed(1)) }));
+    }
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    if (wantShots) await saveShot(page, 'world_yellow.png');
+    await context.close();
+  }
+
+  // Зал ожидания: фонаря нет, место держит неподвижность — стоя виден снимок, на ходу время идёт.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=station');
+    check('с ?world=station заставка показывает зал ожидания', (await page.textContent('.vz-overlay__opt--place'))?.trim() === RU['ui.place.station']);
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    // Лицом к залу: он всегда к северу от входа.
+    const spawn = (await vz(page, () => window.__vz.level())).spawn;
+    await vz(page, ([x, z]) => window.__vz.teleport(x, 0, z, 0, 0), [spawn[0], spawn[2]]);
+    for (let i = 0; i < 30; i++) await vz(page, () => window.__vz.step(6));
+    const st = await state(page);
+    let fl = await vz(page, () => window.__vz.flow());
+    check('зал ожидания: фонаря нет; игрок стоит — виден снимок, время на нём не идёт', st.world === 'station' && st.hasLight === false && fl !== null && fl.frozen === true && fl.f < 0.05, JSON.stringify({ world: st.world, hasLight: st.hasLight, f: fl?.f, frozen: fl?.frozen }));
+    const bright = mean(await vz(page, () => window.__vz.probe()));
+    check('стоя зал собран и светел', bright > 40, `средняя яркость ${bright.toFixed(1)}`);
+    const t0 = fl.t;
+    for (let i = 0; i < 20; i++) await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+    fl = await vz(page, () => window.__vz.flow());
+    check('пошёл — время места идёт в полную силу, и виден не снимок, а само место', fl.frozen === false && fl.f > 0.9 && fl.t - t0 > 1.4 && Math.abs(fl.viewT - fl.t) < 1e-6, JSON.stringify({ f: +fl.f.toFixed(2), прошло: +(fl.t - t0).toFixed(2), frozen: fl.frozen }));
+    for (let i = 0; i < 20; i++) await vz(page, () => window.__vz.step(6));
+    const a = await vz(page, () => window.__vz.flow());
+    for (let i = 0; i < 20; i++) await vz(page, () => window.__vz.step(6));
+    const b = await vz(page, () => window.__vz.flow());
+    check('остановился — снова снимок: время на нём стоит, а под ним идёт втрое медленнее', a.frozen && b.frozen && b.viewT === a.viewT && b.t - a.t > 0.5 && b.t - a.t < 0.7, JSON.stringify({ снимок: [+a.viewT.toFixed(2), +b.viewT.toFixed(2)], прошло: +(b.t - a.t).toFixed(2) }));
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    if (wantShots) await saveShot(page, 'world_station.png');
+    await context.close();
+  }
+
+  // Как в Safari: у каждой сетки на сценах хватает каждого канала на все вершины. Safari проверяет это
+  // перед отрисовкой и при нехватке не рисует сетку целиком, Chrome подставляет нули — так на iPhone
+  // партнёра пропадал весь зал ожидания и половина комнат убежища, а здесь всё было видно.
+  for (const world of ['shelter', 'office', 'yellow', 'station']) {
+    const { page, context, log } = await openPage(browser, baseUrl, `?q=low&fail=0&lang=ru&touch=0&seed=20041113&world=${world}`);
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    for (let i = 0; i < 6; i++) await vz(page, () => window.__vz.step(6));
+    const bad = await vz(page, () => window.__vz.geometryAudit());
+    check(`${world}: у каждой сетки хватает каждого канала на все вершины (иначе Safari её не рисует)`, bad.length === 0, bad.slice(0, 4).join(' | '));
+    check(`${world}: нет ошибок в консоли`, log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    await context.close();
+  }
+}
+
+/** Средняя яркость середины кадра (сетка 32×18): столбцы 12–19, строки 5–12. */
+function centre(grid) {
+  let sum = 0;
+  let n = 0;
+  for (let r = 5; r <= 12; r++) {
+    for (let c = 12; c <= 19; c++) {
+      sum += grid[r * 32 + c];
+      n += 1;
+    }
+  }
+  return sum / n;
+}
+
+/** Объект уровня по номеру (его состояние сейчас). */
+const objOf = async (page, id) => (await vz(page, () => window.__vz.objects())).find((x) => x.id === id);
+/** Куда у объекта «перед»: единичный вектор оси +z (см. gotoObject в debug.ts). */
+const frontOf = (o) => [o.rot === 1 ? 1 : o.rot === 3 ? -1 : 0, o.rot === 0 ? 1 : o.rot === 2 ? -1 : 0];
+/** Расстояние от точки до передней грани объекта вдоль «перед»: положительное — перед ним, отрицательное — внутри или за гранью. */
+function frontDist(o, pos) {
+  const [fx, fz] = frontOf(o);
+  const cx = (o.min[0] + o.max[0]) / 2;
+  const cz = (o.min[2] + o.max[2]) / 2;
+  const half = fx !== 0 ? (o.max[0] - o.min[0]) / 2 : (o.max[2] - o.min[2]) / 2;
+  return (pos[0] - cx) * fx + (pos[2] - cz) * fz - half;
+}
+/** Средняя разница двух кадров по середине (столбцы 10–21, строки 4–13). */
+function centreDiff(a, b) {
+  let sum = 0;
+  let n = 0;
+  for (let r = 4; r <= 13; r++) for (let c = 10; c <= 21; c++, n++) sum += Math.abs(a[r * 32 + c] - b[r * 32 + c]);
+  return sum / n;
+}
+/** Крупные предметы с преградой (не картонки, не двери, не экраны), самые объёмные первыми. */
+function bulkyObjects(list) {
+  const dims = (o) => [o.max[0] - o.min[0], o.max[1] - o.min[1], o.max[2] - o.min[2]];
+  return list
+    .filter((o) => o.solid && !o.flat && !/^(door|display|ladder)/.test(o.name) && dims(o)[1] > 0.8 && Math.min(dims(o)[0], dims(o)[2]) >= 0.4)
+    .sort((a, b) => dims(b)[0] * dims(b)[1] * dims(b)[2] - dims(a)[0] * dims(a)[1] * dims(a)[2]);
+}
+/**
+ * Подойти к предмету и идти в него. Берёт первого из кандидатов, который стоит (here) и до которого
+ * игрок доходит: часть предметов в списке — из скрытого варианта комнаты или загорожена соседями.
+ * Возвращает кадр до касания, расстояние до передней грани в момент, когда предмет начал растворяться,
+ * и после того, как он пропал и игрок прошёл дальше.
+ */
+async function walkThrough(page, cands, dist = 2.2) {
+  const tried = [];
+  for (const c of cands.slice(0, 14)) {
+    if ((await objOf(page, c.id))?.state !== 'here') continue;
+    await vz(page, ([id, d]) => window.__vz.gotoObject(id, d), [c.id, dist]);
+    await vz(page, () => window.__vz.step(6));
+    const g0 = await vz(page, () => window.__vz.probe());
+    let o = await objOf(page, c.id);
+    let touchD = null;
+    let first = null;
+    for (let i = 0; i < 40 && !(touchD !== null && o.state === 'gone'); i++) {
+      const st = await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+      o = await objOf(page, c.id);
+      if (touchD === null && o.state !== 'here') {
+        touchD = frontDist(o, st.pos);
+        first = o.state;
+      }
+    }
+    if (touchD === null) {
+      tried.push(`${c.name}#${c.id}`);
+      continue;
+    }
+    // Ещё секунду вперёд: игрок идёт уже сквозь то, что от предмета осталось.
+    let st;
+    for (let i = 0; i < 10; i++) st = await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+    return { o: await objOf(page, c.id), g0, touchD, first, endD: frontDist(o, st.pos), tried };
+  }
+  return null;
+}
+
+/**
+ * Карточка от руки «please use only when necessary»: одна на уровень, рядом с началом; нарисована в
+ * атласе надписей (не пустой лист) и видна на стене — кадр с ней светлее, чем тот же кадр мимо неё.
+ */
+async function noteCheck(page, where) {
+  const notes = await vz(page, () => window.__vz.notes());
+  const ink = await vz(page, () => window.__vz.sheetContrast('card_use'));
+  const start = (await state(page)).pos;
+  const ok = await vz(page, () => window.__vz.gotoNote(0, 1.0));
+  const st = await vz(page, () => window.__vz.step(40));
+  const at = notes[0]?.at ?? [0, 0, 0];
+  const d = Math.hypot(st.pos[0] - at[0], st.pos[2] - at[2]);
+  check(`${where}: карточка от руки — одна на уровень, нарисована (не пустой лист), и к ней можно подойти`, notes.length === 1 && notes[0].id === 'card_use' && ink > 12 && ok === true && d < 1.6, `карточек ${notes.length}, пестрота ${ink.toFixed(1)}, до неё ${d.toFixed(2)} м`);
+  if (wantShots) await saveShot(page, `note_${where === 'убежище' ? 'shelter' : where === 'офис' ? 'office' : 'yellow'}.png`);
+  await vz(page, ([x, y, z]) => window.__vz.teleport(x, y, z), start);
+  await vz(page, () => window.__vz.step(6));
+}
+
+async function scenarioFlats(browser, baseUrl) {
+  section('Плоские вещи: картонки, проекции, выставочные экраны (экраны растворяются от касания)');
+
+  // Убежище: проекция поперёк коридора и картонка у стены. Картонка — редкая находка, не на каждом
+  // уровне: на этом сиде она есть в ранге 2 (с 25.11, когда растения перестали заходить в мебель, в ранге 3
+  // её больше нет; в ранге 1 — шкаф, это запасной вариант сценария ниже).
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=2');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    const afterSec = async (seconds, input) => {
+      for (let i = 0; i < Math.round(seconds * 10); i++) await vz(page, (inp) => window.__vz.step(6, inp ?? undefined), input ?? null);
+      return vz(page, () => window.__vz.probe());
+    };
+    await afterSec(3);
+    const flats = await vz(page, () => window.__vz.flats());
+    const veil = flats.findIndex((f) => f.kind === 'veil');
+    const stand = flats.findIndex((f) => f.kind === 'standee');
+    check('в убежище есть и проекция, и картонка; экранов нет', veil >= 0 && stand >= 0 && !flats.some((f) => f.kind === 'screen'), JSON.stringify(flats.map((f) => `${f.kind}:${f.what}`)));
+    await noteCheck(page, 'убежище');
+    const side = (st, f) => (st.pos[0] - f.at[0]) * f.n[0] + (st.pos[2] - f.at[2]) * f.n[2];
+
+    // Проекция светится в темноте: с ней середина кадра светлая, без неё — чёрная.
+    await vz(page, (i) => window.__vz.gotoFlat(i, 4.4), veil);
+    await vz(page, () => window.__vz.toggleLight());
+    const shown = centre(await afterSec(9));
+    await vz(page, () => window.__vz.slides(false));
+    const hidden = centre(await afterSec(9));
+    await vz(page, () => window.__vz.slides(true));
+    check('проекция светится в темноте сама: с ней середина кадра светлая, без неё темно', shown > 28 && hidden < shown * 0.4, `с проекцией ${shown.toFixed(1)}, без неё ${hidden.toFixed(1)}`);
+    // Луч фонаря её смывает: под лучом кадр с проекцией и без неё почти одинаков.
+    await vz(page, () => window.__vz.toggleLight());
+    const litShown = centre(await afterSec(3));
+    await vz(page, () => window.__vz.slides(false));
+    const litHidden = centre(await afterSec(3));
+    await vz(page, () => window.__vz.slides(true));
+    check('луч фонаря смывает проекцию: под ним видно то, что за ней на самом деле', Math.abs(litShown - litHidden) < Math.max(6, litHidden * 0.12), `с проекцией ${litShown.toFixed(1)}, без неё ${litHidden.toFixed(1)}`);
+    // Сквозь неё можно пройти.
+    await vz(page, (i) => window.__vz.gotoFlat(i, 2), veil);
+    let st = await vz(page, () => window.__vz.step(1));
+    const before = side(st, flats[veil]);
+    await afterSec(3.5, { moveZ: 1 });
+    st = await state(page);
+    check('сквозь проекцию можно пройти: игрок по ту сторону', before > 1.5 && side(st, flats[veil]) < -1, `было ${before.toFixed(2)} м перед ней, стало ${side(st, flats[veil]).toFixed(2)}`);
+    // С изнанки её нет.
+    await vz(page, (i) => window.__vz.gotoFlat(i, -3.5), veil);
+    await vz(page, () => window.__vz.toggleLight());
+    const back = centre(await afterSec(9));
+    check('с изнанки проекции нет: там темно', back < shown * 0.4, `с лица ${shown.toFixed(1)}, с изнанки ${back.toFixed(1)}`);
+    await vz(page, () => window.__vz.toggleLight());
+
+    // Картонка: сквозь неё проходишь до самой стены (без картонки проверка выше уже провалена — здесь не падаем).
+    if (stand >= 0) {
+      await vz(page, (i) => window.__vz.gotoFlat(i, 1.5), stand);
+      await afterSec(2.5, { moveZ: 1 });
+      st = await state(page);
+      check('картонка не мешает пройти: игрок прошёл сквозь лист', side(st, flats[stand]) < -0.05, `${flats[stand].what}: ${side(st, flats[stand]).toFixed(2)} м от листа`);
+    }
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    if (wantShots) {
+      mkdirSync(OUT, { recursive: true });
+      await vz(page, (i) => window.__vz.gotoFlat(i, 4.4), veil);
+      await vz(page, () => window.__vz.toggleLight());
+      await afterSec(9);
+      await saveShot(page, 'flat_veil.png');
+    }
+    await context.close();
+  }
+
+  // Офис: выставочные экраны с картинками.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=office');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    const afterSec = async (seconds, input) => {
+      for (let i = 0; i < Math.round(seconds * 10); i++) await vz(page, (inp) => window.__vz.step(6, inp ?? undefined), input ?? null);
+      return vz(page, () => window.__vz.probe());
+    };
+    await page.waitForFunction(() => window.__vz.screens().length >= 10, null, { timeout: 30000 }).catch(() => {});
+    const loaded = await vz(page, () => window.__vz.screens());
+    check('картинки экранов загружены: все десять (восемь картинок, витрина книжного автомата и луг для проёма)', loaded.length === 10 && loaded.includes('meadow') && loaded.includes('books'), loaded.join(', '));
+    // Листы бумаги (assets/papers): слои должны дойти и в обычной сборке, и вшитыми в одну страницу. Список — как в
+    // src/world/papers.ts (PAPER_LAYERS): семь слоёв из фотографий партнёра, наклейки и два слоя снимков больного сна (19.11).
+    const PAPER_LAYERS = ['faces_a', 'faces_b', 'faces_c', 'money', 'notgeld', 'bonds', 'map_union', 'stickers', 'dream_a', 'dream_b'];
+    await page.waitForFunction((n) => window.__vz.papers().length >= n, PAPER_LAYERS.length, { timeout: 30000 }).catch(() => {});
+    const papers = await vz(page, () => window.__vz.papers());
+    check(`листы бумаги загружены: все ${PAPER_LAYERS.length} слоёв`, papers.length === PAPER_LAYERS.length && PAPER_LAYERS.every((id) => papers.includes(id)), papers.join(', '));
+    const paperObjs = (await vz(page, () => window.__vz.objects())).filter((o) => o.name === 'frames_bonds' || o.name === 'money_board').map((o) => o.name);
+    check('в офисе висят акции в рамах и щит с купюрами', paperObjs.includes('frames_bonds') && paperObjs.includes('money_board'), paperObjs.join(', '));
+    await afterSec(3);
+    const flats = await vz(page, () => window.__vz.flats());
+    const lvl = await vz(page, () => window.__vz.level());
+    const reception = lvl.rooms.find((r) => r.type === 'reception');
+    const scr = flats.findIndex((f) => f.kind === 'screen' && f.room === reception?.id);
+    check('в приёмной офиса стоит экран с природой; проекций в офисе нет', scr >= 0 && !flats.some((f) => f.kind === 'veil'), JSON.stringify(flats.map((f) => `${f.kind}:${f.what}`)));
+    await noteCheck(page, 'офис');
+    await vz(page, (i) => window.__vz.gotoFlat(i, 1.9), scr);
+    await vz(page, () => window.__vz.toggleLight());
+    const shown = centre(await afterSec(3));
+    await vz(page, () => window.__vz.slides(false));
+    const hidden = centre(await afterSec(9));
+    await vz(page, () => window.__vz.slides(true));
+    check('экран светится картинкой: без неё на его месте чёрная панель', shown > hidden + 12, `с картинкой ${shown.toFixed(1)}, без неё ${hidden.toFixed(1)}`);
+    // Фонарь экран не смывает.
+    await vz(page, () => window.__vz.toggleLight());
+    const litShown = centre(await afterSec(3));
+    await vz(page, () => window.__vz.slides(false));
+    const litHidden = centre(await afterSec(3));
+    await vz(page, () => window.__vz.slides(true));
+    check('фонарь экран не смывает: под лучом картинка на месте', Math.abs(litShown - litHidden) > 8, `с картинкой ${litShown.toFixed(1)}, без неё ${litHidden.toFixed(1)}`);
+    // Экран растворяется от касания — как всё, чего касается герой, — и возвращается собой после темноты.
+    const scrObj = (await vz(page, () => window.__vz.objects()))
+      .filter((o) => o.name.startsWith('display'))
+      .sort((a, b) => Math.hypot(a.at[0] - flats[scr].at[0], a.at[2] - flats[scr].at[2]) - Math.hypot(b.at[0] - flats[scr].at[0], b.at[2] - flats[scr].at[2]))[0];
+    check('у экрана в приёмной есть предмет-объект рядом', !!scrObj && Math.hypot(scrObj.at[0] - flats[scr].at[0], scrObj.at[2] - flats[scr].at[2]) < 1.5, JSON.stringify(scrObj?.at));
+    const hit = scrObj ? await walkThrough(page, [scrObj], 1.9) : null;
+    check('экран растворяется от касания: игрок идёт в него и проходит насквозь', !!hit && ['going', 'gone'].includes(hit.first) && hit.endD < -0.05, hit ? `${hit.first}, до грани ${hit.touchD.toFixed(2)} → ${hit.endD.toFixed(2)} м, ${hit.o.state}` : 'не дошёл');
+    // Отошёл и замер: панели гаснут, экран всё ещё растворён.
+    await vz(page, ([id]) => window.__vz.gotoObject(id, 2.2), [scrObj.id]);
+    await afterSec(6.5);
+    let st = await state(page);
+    let so = await objOf(page, scrObj.id);
+    check('замер — панели погасли; экран, пока темно, не возвращается', st.lights.lit === 0 && so.state === 'gone', JSON.stringify({ lights: st.lights, still: st.stillFor, screen: so.state }));
+    // Пошевелился: свет вернулся, и вместе с ним — экран, собой и на своём месте.
+    for (let i = 0; i < 40 && so.state !== 'here'; i++) {
+      await vz(page, () => window.__vz.step(6, { lookYaw: 0.0005 }));
+      so = await objOf(page, scrObj.id);
+    }
+    st = await state(page);
+    check('пошевелился — экран вернулся собой и на то же место (не «ушёл» вещью сна)', so.state === 'here' && st.illusions.back >= 1, JSON.stringify({ screen: so.state, ill: st.illusions }));
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    if (wantShots) {
+      await vz(page, (i) => window.__vz.gotoFlat(i, 1.9, 0.9), scr);
+      await afterSec(2);
+      await saveShot(page, 'flat_screen.png');
+    }
+    await context.close();
+  }
+
+  // Жёлтые комнаты: ровно два экрана на уровень, картинки разные; проекции — в тёмных коридорах.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=yellow');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    await vz(page, () => window.__vz.step(6));
+    const flats = await vz(page, () => window.__vz.flats());
+    const lvl = await vz(page, () => window.__vz.level());
+    const screens = flats.filter((f) => f.kind === 'screen');
+    check('в жёлтых комнатах экранов ровно два: на одном — картинка, на другом — луг самой игры (проём)', screens.length === 2 && screens.filter((f) => f.what === 'meadow').length === 1, JSON.stringify(screens.map((f) => f.what)));
+    const veils = flats.filter((f) => f.kind === 'veil');
+    check('проекции в жёлтых комнатах стоят в коридорах (не у ламп)', veils.length >= 1 && veils.every((f) => lvl.rooms.find((r) => r.id === f.room)?.type === 'corridor'), JSON.stringify(veils.map((f) => `${f.what}@${lvl.rooms.find((r) => r.id === f.room)?.type}`)));
+    await noteCheck(page, 'жёлтые комнаты');
+
+    // Проём: экран, на котором не картинка, а другое место. Смотреть на него можно сколько угодно;
+    // вошёл — выбеливание и луг; дверная рама луга возвращает туда, откуда вошёл.
+    const doorAt = flats.findIndex((f) => f.kind === 'screen' && f.what === 'meadow');
+    const doorObj = (await vz(page, () => window.__vz.objects())).find((o) => o.name === 'display_door');
+    await page.waitForFunction(() => window.__vz.screens().includes('meadow'), null, { timeout: 30000 }).catch(() => {});
+    await stepUntil(page, (s) => s.jump === null, 12, 40);
+    // Фонарь выключен: проём светится сам — середина кадра с картинкой светлая, без неё чёрная.
+    await vz(page, (i) => window.__vz.gotoFlat(i, 1.9), doorAt);
+    await vz(page, () => window.__vz.toggleLight());
+    let st = await vz(page, () => window.__vz.step(240));
+    const shown = centre(await vz(page, () => window.__vz.probe()));
+    await vz(page, () => window.__vz.slides(false));
+    await vz(page, () => window.__vz.step(6));
+    const hidden = centre(await vz(page, () => window.__vz.probe()));
+    await vz(page, () => window.__vz.slides(true));
+    await vz(page, () => window.__vz.toggleLight());
+    st = await vz(page, () => window.__vz.step(30));
+    check('перед проёмом можно стоять: экран на месте, в темноте светится лугом и никуда не уносит', st.where === 'main' && st.jump === null && (await objOf(page, doorObj?.id))?.state === 'here' && shown > hidden + 12, `${st.where}, с картинкой ${shown.toFixed(1)}, без неё ${hidden.toFixed(1)}`);
+    if (wantShots) {
+      await vz(page, () => window.__vz.step(1));
+      await saveShot(page, 'flat_door.png');
+    }
+    const from = st.pos;
+    await vz(page, (i) => window.__vz.gotoFlat(i, 1.4), doorAt);
+    await vz(page, () => window.__vz.step(6));
+    let cause = null;
+    for (let i = 0; i < 40 && !(st.where === 'pocket' && st.jump === null); i++) {
+      st = await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+      if (st.jump && cause === null) cause = `${st.jump.cause}/${st.jump.style}/${st.jump.to}`;
+    }
+    st = await vz(page, () => window.__vz.step(60));
+    const meadow = await vz(page, () => window.__vz.probe());
+    check('вошёл в проём — выбеливание и луг: игрок на лугу, картинка есть и не чёрная', st.where === 'pocket' && st.pocket === 'meadow' && cause === 'door/whiteout/meadow' && frameMean(meadow) > 20, `${st.where}/${st.pocket}, скачок ${cause}, среднее ${frameMean(meadow).toFixed(1)}`);
+    check('экран проёма при этом рассыпался, как всё, чего коснулись', ['going', 'gone'].includes((await objOf(page, doorObj?.id))?.state), (await objOf(page, doorObj?.id))?.state);
+    if (wantShots) await saveShot(page, 'flat_door_meadow.png');
+    // Обратно — через дверную раму луга.
+    await vz(page, () => window.__vz.gotoPocket('exit', 1));
+    for (let i = 0; i < 60 && !(st.where === 'main' && st.jump === null); i++) st = await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+    check('дверная рама луга возвращает к проёму: игрок снова в жёлтых комнатах, рядом с местом экрана', st.where === 'main' && Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]) < 6, `${st.where}, от места экрана ${Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]).toFixed(1)} м`);
+    check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    await context.close();
+  }
+}
+
+/**
+ * «Всё иллюзорно»: чего касается герой, растворяется; вернуться может только после темноты (выкл/вкл
+ * фонарь, в офисе — замер и движение) и уже, быть может, другим или в другом месте.
+ */
+async function scenarioIllusions(browser, baseUrl) {
+  section('Всё иллюзорно: предметы, мелкие вещи, картонки и офис растворяются от касания и возвращаются после темноты');
+  const lightOn = async (page) => {
+    if ((await state(page)).light.state === 'off') await vz(page, () => window.__vz.toggleLight());
+  };
+  const run = (page, seconds, input) => vz(page, ([n, inp]) => {
+    for (let i = 0; i < n; i++) window.__vz.step(30, inp ?? undefined);
+    return window.__vz.state();
+  }, [Math.round(seconds * 2), input ?? null]);
+  /** Шагать по полсекунды, пока не выполнится условие над объектом (но не дольше max секунд). */
+  const waitObj = async (page, id, cond, max, input) => {
+    let o = await objOf(page, id);
+    for (let t = 0; t < max * 2 && !cond(o); t++) {
+      await vz(page, (inp) => window.__vz.step(30, inp ?? undefined), input ?? null);
+      o = await objOf(page, id);
+    }
+    return o;
+  };
+
+  // Убежище.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=2');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    await run(page, 2);
+    const objs = await vz(page, () => window.__vz.objects());
+    // Не те, что возвращаются собой: предмет со своей ролью или тот, на котором лежит вещь воспоминания.
+    // И не бумажные цветы: у них своя лестница (тусклые → кружево), картонкой они не возвращаются.
+    const cands = bulkyObjects(objs).filter((o) => !o.keeps && !o.name.startsWith('paper_flower'));
+    check('на уровне есть объекты, часть с преградой', objs.length >= 20 && objs.some((o) => o.solid) && cands.length >= 3, `объектов ${objs.length}, с преградой ${objs.filter((o) => o.solid).length}, крупных ${cands.length}, возвращаются собой ${objs.filter((o) => o.keeps).length}`);
+
+    // Предмет с преградой.
+    const hit = await walkThrough(page, cands);
+    const id = hit?.o.id;
+    check('игрок идёт в предмет с преградой: тот сперва держит, потом растворяется, игрок проходит на ту сторону передней грани', !!hit && hit.first === 'going' && hit.touchD > 0.05 && hit.endD < -0.1 && hit.o.state === 'gone', hit ? `${hit.o.name}#${id}: в момент касания до грани ${hit.touchD.toFixed(2)} м, потом ${hit.endD.toFixed(2)} м, ${hit.first} → ${hit.o.state}; не подошли: ${hit.tried.join(', ') || '—'}` : 'ни один не растворился');
+    if (!hit) {
+      await context.close();
+      return;
+    }
+    let st = await state(page);
+    check('счётчик касаний вырос', st.illusions.gone >= 1 && st.illusions.back === 0, JSON.stringify(st.illusions));
+    const thingsBefore = (await vz(page, () => window.__vz.things())).length;
+    // Тот же ракурс: до касания в середине был предмет, теперь стена.
+    await vz(page, ([i]) => window.__vz.gotoObject(i, 2.2), [id]);
+    await run(page, 0.3);
+    const g1 = await vz(page, () => window.__vz.probe());
+    const diff1 = centreDiff(hit.g0, g1);
+    check('кадр на месте предмета изменился: вместо него стена', diff1 > 8, `разница середины кадра ${diff1.toFixed(1)}, среднее ${mean(hit.g0).toFixed(1)} → ${mean(g1).toFixed(1)}`);
+    await lightOn(page);
+    await run(page, 5);
+    let o = await objOf(page, id);
+    check('при горящем фонаре за 5 с предмет не вернулся', o.state === 'gone', `${o.state}, back ${(await state(page)).illusions.back}`);
+    // Темнота: фонарь выкл, подождать, вкл.
+    await vz(page, () => window.__vz.toggleLight());
+    await run(page, 3);
+    st = await state(page);
+    const darkBack = st.illusions.back;
+    check('пока фонарь выключен, предмет тоже не возвращается', (await objOf(page, id)).state === 'gone' && darkBack === 0, `${(await objOf(page, id)).state}, back ${darkBack}`);
+    await vz(page, () => window.__vz.toggleLight());
+    o = await waitObj(page, id, (x) => x.state === 'here' || x.state === 'left', 8);
+    st = await state(page);
+    const things1 = (await vz(page, () => window.__vz.things())).length;
+    const card1 = (await vz(page, () => window.__vz.things())).filter((t) => t.kind === o.name && t.form === 1).length;
+    check('выключил и включил фонарь — предмет вернулся на ступень хуже: из сетки помещения ушёл, вместо него стоит картонка (вещей стало больше)', o.state === 'left' && things1 > thingsBefore && card1 >= 1 && st.illusions.back >= 1, `${o.name}#${id}: ${o.state}, вещей ${thingsBefore} → ${things1}, картонок этого предмета ${card1}, back ${st.illusions.back}`);
+    await vz(page, ([i]) => window.__vz.gotoObject(i, 2.2), [id]);
+    await run(page, 0.3);
+    const g2 = await vz(page, () => window.__vz.probe());
+    const diff2 = centreDiff(g1, g2);
+    // Вместе с ним вернулось и всё, что игрок задел по дороге: вещей могло прибавиться больше чем на одну.
+    check('на месте снова что-то стоит: кадр снова изменился (если предмет вернулся на другое место — там появилась новая вещь)', o.state === 'left' ? things1 > thingsBefore : diff2 > 8, `${o.state}, разница ${diff2.toFixed(1)}, вещей ${thingsBefore} → ${things1}`);
+
+    // Пока игрок стоит на месте предмета, тот не возвращается.
+    const rest = cands.filter((c) => c.id !== id);
+    const hit2 = await walkThrough(page, rest);
+    if (hit2) {
+      const id2 = hit2.o.id;
+      await vz(page, () => window.__vz.toggleLight());
+      await run(page, 3);
+      await vz(page, () => window.__vz.toggleLight());
+      await run(page, 3);
+      let o2 = await objOf(page, id2);
+      const inside = frontDist(o2, (await state(page)).pos) < 0;
+      check('пока игрок стоит на месте предмета, тот не возвращается, хоть свет и погас и зажёгся', inside && o2.state === 'gone', `${o2.name}#${id2}: ${o2.state}, игрок ${inside ? 'внутри' : 'снаружи'}`);
+      await vz(page, ([i]) => window.__vz.gotoObject(i, 2.2), [id2]);
+      o2 = await waitObj(page, id2, (x) => x.state !== 'gone', 6);
+      check('отошёл — предмет вернулся', o2.state !== 'gone' && o2.state !== 'going', o2.state);
+    } else check('пока игрок стоит на месте предмета, тот не возвращается', false, 'второго предмета для проверки не нашлось');
+
+    // Мелкая вещь сна без преграды.
+    await lightOn(page);
+    // Только вещь в настоящем виде: задетая раньше (по дороге к предметам) вернулась на ступень хуже, а с последней ступени вещь
+    // после касания стирается совсем — и пропадает из списка (CI 19.11: «Cannot read properties of undefined (reading 'state')»).
+    const things = (await vz(page, () => window.__vz.things())).filter((t) => !t.memory && t.state === 'idle' && SMALL_THINGS.includes(t.kind) && (t.form ?? 0) === 0);
+    /** Вещь по номеру; стёрта совсем (её нет в списке) — с состоянием 'erased'. */
+    const thingNow = async (t) => (await vz(page, () => window.__vz.things())).find((x) => x.id === t.id) ?? { ...t, state: 'erased' };
+    let thing = null;
+    for (const t of things) {
+      if (!(await vz(page, ([i]) => window.__vz.gotoThing(i, 2.2), [t.id]))) continue;
+      const from = (await state(page)).pos;
+      // Только вещь на полу (на неё и наступают). Лежащая на столе или полке растворяется вместе с опорой, которую задеваешь по
+      // дороге, и опора, вернувшись другой, её уже не держит — вещь стирается совсем (applyComeback: «снимку стола чашку не
+      // удержать»; CI 9a1a6da: пульт на 0,7 м).
+      if (t.pos[1] - from[1] > 0.25) continue;
+      // Взгляд в пол: иначе вещь растворится не от касания, а от долгого взгляда (у неё своя судьба), и вернуться ей незачем.
+      // look — приращение (Game.look прибавляет к прицелу), а не угол: прежнее look(aim[0], −1.3) разворачивало игрока от вещи,
+      // и шаг доходил до неё, только когда курс случайно был около нуля (CI 9a1a6da; проба: 4 вещи на полу — ни одной).
+      await vz(page, () => window.__vz.look(0, -1.3));
+      let cur = t;
+      for (let i = 0; i < 40 && cur.state !== 'gone' && cur.state !== 'erased'; i++) {
+        await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+        cur = await thingNow(t);
+      }
+      if (cur.state === 'gone') {
+        thing = { t, from };
+        break;
+      }
+    }
+    check('мелкая вещь сна: наступил — растворилась', !!thing, `пробовали: ${things.map((t) => t.kind).join(', ')}`);
+    if (thing) {
+      await vz(page, ([p]) => window.__vz.teleport(p[0], p[1], p[2]), [thing.from]);
+      await vz(page, () => window.__vz.toggleLight());
+      await run(page, 3);
+      await vz(page, () => window.__vz.toggleLight());
+      let cur = null;
+      for (let i = 0; i < 24; i++) {
+        await vz(page, () => window.__vz.step(30));
+        cur = await thingNow(thing.t);
+        if (cur.state !== 'gone') break;
+      }
+      check('после выкл/вкл фонаря вещь снова на месте или на другом (не «gone»)', cur.state !== 'gone' && cur.state !== 'erased', `${thing.t.kind}: ${cur.state}, было ${thing.t.pos.map((v) => v.toFixed(1))}, стало ${cur.pos.map((v) => v.toFixed(1))}, kind ${cur.kind}`);
+    }
+
+    // Картонка. Стоячая картонка редка, и на этом сиде её место зависит от расстановки бумаги и растений:
+    // если на ранге 2 её нет, та же проверка идёт на ранге 1 (на ранге 3 её с 25.11 нет).
+    await lightOn(page);
+    let cp = page;
+    let extra = null;
+    let cobjs = objs;
+    let flats = await vz(page, () => window.__vz.flats());
+    let stand = flats.findIndex((f) => f.kind === 'standee');
+    // Первая страница закрывается до того, как открыть вторую: две страницы разом в программной
+    // отрисовке не успевают загрузиться (в смоуке 16.11 вторая не дождалась готовности за 90 с).
+    let firstErrs = null;
+    if (stand < 0) {
+      firstErrs = { errors: [...log.errors], warnings: [...log.warnings] };
+      await context.close();
+      extra = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=1');
+      cp = extra.page;
+      await cp.click('.vz-overlay');
+      await sleep(300);
+      await vz(cp, () => window.__vz.freeze(true));
+      await vz(cp, () => window.__vz.calm(true));
+      await run(cp, 2);
+      await lightOn(cp);
+      cobjs = await vz(cp, () => window.__vz.objects());
+      flats = await vz(cp, () => window.__vz.flats());
+      stand = flats.findIndex((f) => f.kind === 'standee');
+    }
+    const flatObjs = cobjs.filter((o) => o.flat);
+    const so = stand >= 0 ? flatObjs.sort((a, b) => Math.hypot(a.at[0] - flats[stand].at[0], a.at[2] - flats[stand].at[2]) - Math.hypot(b.at[0] - flats[stand].at[0], b.at[2] - flats[stand].at[2]))[0] : null;
+    check('на уровне есть картонка, и у неё есть объект', stand >= 0 && !!so && Math.hypot(so.at[0] - flats[stand].at[0], so.at[2] - flats[stand].at[2]) < 1.5, JSON.stringify(so?.at));
+    if (so) {
+      await vz(cp, ([i]) => window.__vz.gotoFlat(i, 1.5), [stand]);
+      let seen = null;
+      // Облако точек живёт, пока вещь растворяется: смотрим на него на каждом шаге.
+      const most = { clouds: 0, points: 0 };
+      for (let i = 0; i < 40; i++) {
+        await vz(cp, () => window.__vz.step(6, { moveZ: 1 }));
+        const cur = await objOf(cp, so.id);
+        if (cur.state !== 'here') seen = cur.state;
+        const d = await vz(cp, () => window.__vz.dust());
+        most.clouds = Math.max(most.clouds, d.clouds);
+        most.points = Math.max(most.points, d.points);
+      }
+      st = await state(cp);
+      const side = (st.pos[0] - flats[stand].at[0]) * flats[stand].n[0] + (st.pos[2] - flats[stand].at[2]) * flats[stand].n[2];
+      check('картонка: прошёл сквозь неё — её объект не «here»', seen !== null && side < -0.05, `${flats[stand].what}: ${seen}, ${side.toFixed(2)} м от листа`);
+      check('тронутая вещь уходит через точки: пока растворяется, у неё есть облако точек', most.clouds >= 1 && most.points >= 90, JSON.stringify(most));
+      // Слова партнёра: «Вещь когда исчезает не должно быть точек в пространстве, они не оседают, а
+      // полностью растворяются». Постоял — от растворившейся вещи не осталось ни точки.
+      await run(cp, 3);
+      const left = await vz(cp, () => window.__vz.dust());
+      check('точки не оседают: через 3 с после распада облака нет', left.clouds === 0, JSON.stringify(left));
+      await vz(cp, ([i]) => window.__vz.gotoFlat(i, 3), [stand]);
+      await vz(cp, () => window.__vz.toggleLight());
+      await run(cp, 3);
+      await vz(cp, () => window.__vz.toggleLight());
+      const back = await waitObj(cp, so.id, (x) => x.state === 'here' || x.state === 'left', 8);
+      const light2 = (await vz(cp, () => window.__vz.things())).filter((t) => t.kind === so.name && t.form === 2).length;
+      check('после выкл/вкл фонаря картонка вернулась на ступень хуже — проекцией (картинкой из света)', back.state === 'left' && light2 >= 1, `${back.state}, проекций этого предмета ${light2}`);
+    }
+    const first = firstErrs ?? log;
+    const errs = [...first.errors, ...(extra?.log.errors ?? [])];
+    check('убежище: нет ошибок в консоли', errs.length === 0, errs.join(' | ').slice(0, 300));
+    const warns = [...first.warnings, ...(extra?.log.warnings ?? [])].filter((w) => !benign(w));
+    check('убежище: нет предупреждений в консоли', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
+    if (extra) await extra.context.close();
+    else await context.close();
+  }
+
+  // Офис: фонаря нет, темноту делает замершее тело.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=office');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    const wiggle = { lookYaw: 0.0005 };
+    let st = await run(page, 2, wiggle);
+    const hasLight0 = st.hasLight;
+    const cands = bulkyObjects(await vz(page, () => window.__vz.objects()));
+    check('офис: фонаря нет', hasLight0 === false && st.light.intensity === 0, JSON.stringify({ hasLight: st.hasLight, light: st.light }));
+    const hit = await walkThrough(page, cands);
+    const id = hit?.o.id;
+    check('офис: дошёл до предмета, коснулся — растворился, игрок прошёл', !!hit && ['going', 'gone'].includes(hit.first) && hit.endD < -0.1, hit ? `${hit.o.name}#${id}: ${hit.first}, до грани ${hit.touchD.toFixed(2)} → ${hit.endD.toFixed(2)} м, ${hit.o.state}; не подошли: ${hit.tried.join(', ') || '—'}` : 'ни один не растворился');
+    if (hit) {
+      await vz(page, ([i]) => window.__vz.gotoObject(i, 2.2), [id]);
+      st = await run(page, 6.5);
+      let o = await objOf(page, id);
+      check('офис: замер — панели погасли; предмет, пока темно, не вернулся', st.lights.lit === 0 && o.state === 'gone' && st.illusions.back === 0, JSON.stringify({ lights: st.lights, still: st.stillFor, obj: o.state }));
+      o = await waitObj(page, id, (x) => x.state === 'here' || x.state === 'left', 8, wiggle);
+      st = await state(page);
+      check('офис: пошевелился — панели загорелись, предмет вернулся или ушёл вещью', (o.state === 'here' || o.state === 'left') && st.illusions.back >= 1 && st.lights.lit >= 1, JSON.stringify({ obj: o.state, lights: st.lights, ill: st.illusions }));
+    }
+
+    check('офис: нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    {
+      const warns = log.warnings.filter((w) => !benign(w));
+      check('офис: нет предупреждений в консоли', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
+    }
+    const none = (await vz(page, () => window.__vz.objects())).filter((x) => x.name === 'birch').length;
+    check('офис: в месте, которое помнится целиком, берёз нет', none === 0, `${none}`);
+    await context.close();
+  }
+
+  // Офис, стёртый почти до конца: берёзы — «знак последних дней» (решение партнёра).
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&world=office&wear=0.78');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    const wiggle = { lookYaw: 0.0005 };
+    let st = await run(page, 2, wiggle);
+    // Берёзы в отделе: картинка с экранов офиса, ставшая комнатой. Стволы растворяются, как всё, но
+    // возвращаются только собой и на своё место: дерево укоренено.
+    {
+      const trees = (await vz(page, () => window.__vz.objects())).filter((x) => x.name === 'birch');
+      check('офис: в отделе проросли берёзы — пять-шесть стволов от пола до потолка', trees.length >= 5 && trees.length <= 6 && trees.every((x) => x.min[1] < 0.05 && x.max[1] > 2.6), `${trees.length}: ${trees.map((x) => x.at.map((v) => v.toFixed(1)).join(',')).join(' | ')}`);
+      const cx = mean(trees.map((x) => x.at[0]));
+      const cz = mean(trees.map((x) => x.at[2]));
+      const t = trees.filter((x) => x.state === 'here').sort((a, b) => Math.hypot(b.at[0] - cx, b.at[2] - cz) - Math.hypot(a.at[0] - cx, a.at[2] - cz))[0];
+      if (t) {
+        // Подходим снаружи рощи: со стороны, противоположной её середине.
+        const d = Math.hypot(t.at[0] - cx, t.at[2] - cz) || 1;
+        const ux = (t.at[0] - cx) / d;
+        const uz = (t.at[2] - cz) / d;
+        const stand = (k) => vz(page, ([x, z, tx, tz]) => window.__vz.teleport(x, 0, z, Math.atan2(-(tx - x), -(tz - z)), 0), [t.at[0] + ux * k, t.at[2] + uz * k, t.at[0], t.at[2]]);
+        await stand(1.2);
+        await run(page, 1.5, wiggle);
+        if (wantShots) {
+          await stand(3.2);
+          await run(page, 2, wiggle);
+          await saveShot(page, 'world_office_grove.png');
+          await stand(1.2);
+          await run(page, 0.5, wiggle);
+        }
+        let o = await objOf(page, t.id);
+        for (let i = 0; i < 40 && o.state === 'here'; i++) {
+          await vz(page, () => window.__vz.step(6, { moveZ: 1 }));
+          o = await objOf(page, t.id);
+        }
+        const touched = o.state;
+        o = await waitObj(page, t.id, (x) => x.state === 'gone', 4, wiggle);
+        check('офис: берёза рассыпается от касания, как всё', ['going', 'gone'].includes(touched) && o.state === 'gone', `${touched} → ${o.state}`);
+        await stand(1.6);
+        st = await run(page, 6.5);
+        o = await objOf(page, t.id);
+        const dark = st.lights.lit === 0 && o.state === 'gone';
+        o = await waitObj(page, t.id, (x) => x.state === 'here' || x.state === 'left', 8, wiggle);
+        check('офис: после темноты берёза встала снова — собой и на своём месте', dark && o.state === 'here' && Math.hypot(o.at[0] - t.at[0], o.at[2] - t.at[2]) < 0.01, JSON.stringify({ dark, state: o.state, at: o.at.map((v) => +v.toFixed(2)) }));
+      }
+    }
+    const w = await vz(page, () => window.__vz.wear());
+    // Вариант A (слова партнёра «A… Тихий слой…»): потолок выпадает дырами не больше чем наполовину, стены
+    // редеют пятнами, пол держится (systems/decay.ts: CEIL_MAX 0,55). Квиз 17.11 «Стены почти уходят»: на двух
+    // последних кругах стены уходят дальше трети (WALLS_MAX 0,3 + WALLS_LATE 0,6) — седьмой круг уже за 0,3.
+    check('стёртый офис: часть предметов — кружево, части нет; потолок выпал до предела — наполовину, стены редеют, пол держится', (w.forms['3'] ?? 0) >= 5 && (w.forms['4'] ?? 0) >= 5 && w.decay.ceiling > 0.5 && w.decay.ceiling <= 0.55 + 1e-6 && w.decay.walls > 0.15 && w.decay.walls <= 0.9 + 1e-6 && w.decay.floor === 0, JSON.stringify({ forms: w.forms, ceiling: w.decay.ceiling, walls: w.decay.walls }));
+    check('стёртый офис: нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    const warns = log.warnings.filter((x) => !benign(x));
+    check('стёртый офис: нет предупреждений в консоли', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
+    await context.close();
+  }
+
+  // Убежище на пятом круге (стёртость 0,56): кружево вместо вещей, гора у начала, бумажные цветы.
+  {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=2&wear=0.56');
+    await page.click('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    await run(page, 2);
+    const lvl = await vz(page, () => window.__vz.level());
+    const w = await vz(page, () => window.__vz.wear());
+    const mounds = lvl.landmarks.filter((m) => m.id === 'mound').length;
+    check('убежище на пятом круге (стёртость 0,56): от части вещей осталось кружево, части уже нет; потолок выпадает; у начала выросла гора', Math.abs(lvl.wear - 0.56) < 1e-6 && (w.forms['3'] ?? 0) >= 5 && (w.forms['4'] ?? 0) >= 2 && w.decay.ceiling > 0.3 && w.decay.walls > 0 && mounds === 1 && w.decay.mound === 2, JSON.stringify({ wear: lvl.wear, forms: w.forms, ceiling: +w.decay.ceiling.toFixed(2), walls: +w.decay.walls.toFixed(2), mounds }));
+    if (wantShots) await saveShot(page, 'world_shelter_worn.png');
+
+    // Бумажные цветы: тусклые; подошёл со светом — расцвели и рассыпались; вернулись кружевом.
+    const flowers = (await vz(page, () => window.__vz.objects())).filter((x) => x.name.startsWith('paper_flower') && x.state === 'here');
+    check('в убежище висят бумажные цветы', flowers.length >= 1, `${flowers.length}`);
+    let bloom = null;
+    for (const f of flowers.slice(0, 8)) {
+      await lightOn(page);
+      if (!(await vz(page, ([i]) => window.__vz.gotoObject(i, 2.0), [f.id]))) continue;
+      const o1 = await waitObj(page, f.id, (x) => x.state !== 'here', 5);
+      if (o1.state === 'here') continue;
+      bloom = { f, first: o1.state };
+      break;
+    }
+    check('подошёл к бумажному цветку со светом — он расцвёл и рассыпался', !!bloom && ['going', 'gone'].includes(bloom.first), bloom ? `${bloom.f.name}#${bloom.f.id}: ${bloom.first}` : `ни один из ${flowers.length} не расцвёл`);
+    if (bloom) {
+      await waitObj(page, bloom.f.id, (x) => x.state === 'gone', 4);
+      await vz(page, () => window.__vz.toggleLight());
+      await run(page, 3);
+      await vz(page, () => window.__vz.toggleLight());
+      const back = await waitObj(page, bloom.f.id, (x) => x.state === 'here' || x.state === 'left', 8);
+      const lace = (await vz(page, () => window.__vz.things())).filter((t) => t.kind === bloom.f.name && t.form === 3).length;
+      check('после темноты цветок вернулся тусклым, как кружево (ступень «кружево»)', back.state === 'left' && lace >= 1, `${back.state}, кружевных цветков этого вида ${lace}`);
+    }
+    check('стёртое убежище: нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    const warns = log.warnings.filter((x) => !benign(x));
+    check('стёртое убежище: нет предупреждений в консоли', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
+    await context.close();
+  }
+
+  // Круг можно задать и после решётки (#lap5) — для страницы по ссылке, у адреса которой нет параметров. Своя страница —
+  // после того, как стёртое убежище закрыто: две страницы разом в программной отрисовке не успевают загрузиться (CI 17.11:
+  // эта, открытая рядом с ним, не дождалась готовности за 90 с).
+  {
+    const hp = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113#lap5');
+    const lv5 = await vz(hp.page, () => window.__vz.level());
+    await hp.page.evaluate(() => {
+      location.hash = '#lap3';
+    });
+    await sleep(400);
+    const lv3 = await vz(hp.page, () => window.__vz.level());
+    check('адрес с #lap5 открывает место на пятом круге (стёртость 0,56); сменили на #lap3 на заставке — место пересобрано (0,28)', Math.abs(lv5.wear - 0.56) < 1e-6 && Math.abs(lv3.wear - 0.28) < 1e-6 && lv3.seed === lv5.seed, JSON.stringify({ lap5: lv5.wear, lap3: lv3.wear }));
+    await hp.context.close();
+  }
+}
+
+async function scenarioGen(browser, baseUrl) {
+  section('Сгенерированный бункер: загрузка, ярусы, отсечение, спуск по лестнице');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=3');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  const level = await vz(page, () => window.__vz.level());
+  check('уровень собран из генератора: три яруса, помещений больше двадцати', level.seed === 20041113 && level.tiers === 3 && level.rooms.length > 20, `ярусов ${level.tiers}, помещений ${level.rooms.length}`);
+  check('геометрия в бюджете: чанков меньше 140, треугольников меньше 400 тысяч', level.chunks < 140 && level.triangles < 400000, `${level.chunks} чанков, ${level.triangles} треугольников`);
+  check('есть места для находок и приметы на каждом ярусе', level.spots > 25 && [0, 1, 2].every((t) => level.landmarks.some((m) => m.tier === t)), `мест ${level.spots}, примет ${level.landmarks.length}`);
+
+  let st = await vz(page, () => window.__vz.step(30));
+  const grid0 = await vz(page, () => window.__vz.probe());
+  let info = await vz(page, () => window.__vz.info());
+  check('у люка: картинка есть, игрок стоит на полу первого яруса', Math.max(...grid0) > 40 && Math.abs(st.pos[1]) < 0.01 && st.onGround, `y = ${st.pos[1].toFixed(3)}`);
+  check('на первом ярусе чужие этажи не рисуются', info.visible < info.chunks * 0.7, `видно ${info.visible} из ${info.chunks}`);
+  // Каждый видимый чанк рисуется трижды: в карту теней, в кадр и своим облаком точек; плюс вещи и
+  // полноэкранные проходы. У люка видно 12–13 чанков: до мебели полки (18.11) было 99 вызовов, с ней — 102 (мебель крупнее,
+  // в кадр попадает ещё один кусок; за стены своих помещений она не выходит — tests/furniture.test.ts).
+  check('вызовов отрисовки не больше 110, облака точек посеяны', info.calls <= 110 && info.points > 50000 && info.clouds >= info.chunks, `${info.calls} вызовов, ${info.triangles} треугольников, сплатов ${info.points}, облаков ${info.clouds} на ${info.chunks} чанков`);
+  // Нагрузка от точек. Облако помещения поделено на клетки: плотность клетки — по расстоянию до неё,
+  // клетка за кадром или дальше 28 м не рисуется. Поэтому видеокарта получает немного лишнего: больше
+  // трети отданных точек шейдер показывает (без клеток — меньше трети, а самих точек было втрое больше).
+  const use = await vz(page, () => window.__vz.cloudUsage());
+  check('точек в кадре в меру: не больше 450 тысяч на среднем качестве, и больше трети из них видны', use.drawn === info.points && use.drawn < 450000 && use.shown > use.drawn * 0.36 && use.cells >= 10 && info.cells >= use.cells, `отдано ${use.drawn}, видно ${use.shown} (${((100 * use.shown) / Math.max(1, use.drawn)).toFixed(0)} %), облаков в кадре ${use.cells} из ${info.cells} живых клеток`);
+
+  // Приметы на каждом ярусе: встаём рядом, проверяем высоту пола и картинку.
+  for (const [tier, id] of [
+    [1, 'diesel'],
+    [2, 'archive'],
+  ]) {
+    const ok = await vz(page, (i) => window.__vz.gotoLandmark(i), id);
+    st = await vz(page, () => window.__vz.step(40));
+    const g = await vz(page, () => window.__vz.probe());
+    info = await vz(page, () => window.__vz.info());
+    check(`ярус ${tier + 1}: примета «${id}» найдена, игрок стоит на полу яруса, в кадре светло`, ok && Math.abs(st.pos[1] + tier * 4.5) < 0.01 && st.onGround && Math.max(...g) > 40, `y = ${st.pos[1].toFixed(2)}, максимум ${Math.max(...g).toFixed(0)}`);
+    check(`ярус ${tier + 1}: рисуется не весь уровень`, info.visible < info.chunks, `видно ${info.visible} из ${info.chunks}, ${info.calls} вызовов`);
+  }
+
+  // ── Плакаты: настоящие листы-картинки, а не рисунки кодом ──
+  // Картинки приходят отдельными файлами после старта: ждём по условию, а не по времени.
+  await page.waitForFunction(() => window.__vz.sheets().length >= 10, null, { timeout: 30000 }).catch(() => {});
+  const sheets = await vz(page, () => window.__vz.sheets());
+  const SHEETS = ['poster_aid', 'poster_alarm', 'poster_dose', 'poster_mask', 'poster_nuclear', 'poster_protect', 'poster_refuge', 'poster_shelter', 'poster_signals', 'scheme'];
+  check('плакаты и план убежища — картинки из файлов: все десять листов загружены', SHEETS.every((id) => sheets.includes(id)) && sheets.length === SHEETS.length, sheets.join(', '));
+  // В клетке каждого листа в атласе — рисунок: разброс яркости у плаката в разы больше, чем у пустого листа (около 10).
+  const contrast = await vz(page, (ids) => ids.map((id) => [id, Math.round(window.__vz.sheetContrast(id))]), SHEETS);
+  check('в атласе на месте каждого листа — рисунок, а не пустая бумага', contrast.every(([, c]) => c > 25), contrast.map(([id, c]) => `${id} ${c}`).join(', '));
+  const marks = await vz(page, () => window.__vz.sheetMarks());
+  const kinds = new Set(marks.map((m) => m.id));
+  check('на уровне висят плакаты: не меньше десяти листов, не меньше шести разных, у каждого есть картинка', marks.length >= 10 && kinds.size >= 6 && [...kinds].every((id) => sheets.includes(id)), `${marks.length} листов, разных ${kinds.size}`);
+  // Перед плакатом: лист в кадре, луч на нём — в кадре светло.
+  const first = marks.findIndex((m) => m.id.startsWith('poster_'));
+  const stood = await vz(page, (i) => window.__vz.gotoSheet(i, 1.3), first);
+  st = await vz(page, () => window.__vz.step(40));
+  const gp = await vz(page, () => window.__vz.probe());
+  check('к плакату можно подойти: игрок стоит перед листом, в кадре светло', stood && st.onGround && Math.max(...gp) > 40, `лист ${marks[first]?.id}, ярче всего ${Math.max(...gp).toFixed(0)}`);
+  if (wantShots) await saveShot(page, 'gen_poster.png');
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+}
+
+/** Ждать, пока звук придёт в нужное состояние (петли затихают и обрываются по часам звука, не сразу). */
+/**
+ * Ждать условия по звуку. Звук затухает и по кадрам игры, и по часам WebAudio, а в проверках игра заморожена (freeze) —
+ * поэтому между опросами идёт и настоящее время, и время игры (три кадра). Раньше ждали только настоящее: на медленной машине
+ * CI затухание, идущее по кадрам, не продвигалось, и «гул стих» не дожидался (d32368f, df6bc8e, 4cb927b).
+ */
+async function audioUntil(page, cond, ms = 9000) {
+  // audio(true): желание игры от петель пересчитывается при каждом опросе, а не только в цикле отрисовки — тот под программной
+  // отрисовкой CI иногда почти стоит (смоук Playgama fa44320: в убежище вернулись, а гул «не вернулся» за 9 с).
+  let au = await vz(page, () => window.__vz.audio(true));
+  for (let t = 0; t < ms && !cond(au); t += 200) {
+    await sleep(200);
+    au = await vz(page, () => {
+      window.__vz.step(3);
+      return window.__vz.audio(true);
+    });
+  }
+  return au;
+}
+
+/** Шагать по n шагов, пока не выполнится условие (но не больше max раз). */
+async function stepUntil(page, cond, n = 20, max = 60) {
+  let st = await state(page);
+  for (let i = 0; i < max && !cond(st); i++) st = await vz(page, (k) => window.__vz.step(k), n);
+  return st;
+}
+
+/** Мелкие вещи сна (их можно рассматривать, не упираясь в мебель). */
+const SMALL_THINGS = ['mug', 'slippers', 'ball', 'teddy', 'alarm_clock', 'remote', 'photo_frame', 'night_light', 'school_bag', 'goldfish_bowl', 'keys', 'phone'];
+/** Средняя яркость кадра по сетке 32×18. */
+const frameMean = (grid) => mean(grid);
+
+async function scenarioFear(browser, baseUrl) {
+  section('Рой и аномалии: охота, развал лучом, поимка не конец сессии; помещения: строб, темнота, сетка, тонкое место');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&rank=3&seed=20041113');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  let st = await vz(page, () => window.__vz.step(5));
+  check('в начале сессии рой спит, режиссёр в первой фазе; фигура ещё не выросла', st.swarm.mode === 'dormant' && st.director.phase === 0 && st.swarm.near === 0 && st.swarm.growth === 0 && st.swarm.flow === null);
+  const spawn = [...st.pos];
+
+  // Повернуть луч на рой и шагать, пока не выполнится условие.
+  const aimAndStep = (steps, extra = {}) =>
+    vz(
+      page,
+      ([n, inp]) => {
+        const v = window.__vz;
+        const s = v.state();
+        const dx = s.swarm.pos[0] - s.pos[0];
+        const dz = s.swarm.pos[2] - s.pos[2];
+        v.teleport(s.pos[0], s.pos[1], s.pos[2], Math.atan2(-dx, -dz), 0.02);
+        return v.step(n, inp);
+      },
+      [steps, extra],
+    );
+
+  // ── Аномалии (пока рой спит) ──
+  const an = await vz(page, () => window.__vz.anomalies());
+  const stair = an.stairs.find((x) => x.upperTier === 1);
+  const ax = Math.sign(stair.bottom[0] - stair.top[0]);
+  const az = Math.sign(stair.bottom[2] - stair.top[2]);
+  await vz(page, ([p, yaw]) => window.__vz.teleport(p[0], p[1], p[2], yaw, -0.3), [stair.top, Math.atan2(-ax, -az)]);
+  st = await vz(page, () => window.__vz.step(10));
+  check('перед спуском на нижний ярус лестница «заряжена» на два лишних пролёта', st.anomalies.loops === 2 && Math.abs(st.pos[1] + 4.5) < 0.01);
+  let ticks = 0;
+  for (; ticks < 40 && st.pos[1] > -8.95; ticks++) st = await vz(page, () => window.__vz.step(20, { moveZ: 1 }));
+  const seconds = (ticks * 20) / 60;
+  check('спуск занял заметно дольше обычного: лестница оказалась длиннее', st.anomalies.loops === 0 && Math.abs(st.pos[1] + 9) < 0.06 && seconds > 6.3 && seconds < 11, `${seconds.toFixed(1)} с вместо ~4,5; осталось пролётов ${st.anomalies.loops}; y = ${st.pos[1].toFixed(2)}`);
+  check('камера на лестнице не дёргалась рывком вверх', st.onGround === true);
+
+  const variant = an.variants[0];
+  await vz(page, () => window.__vz.swarm('sleep'));
+  await vz(page, () => window.__vz.phase(0));
+  await vz(page, (c) => window.__vz.teleport(c[0], c[1], c[2]), variant.center);
+  st = await vz(page, () => window.__vz.step(5));
+  check('в комнате-аномалии поначалу первый вариант обстановки', st.anomalies.alt.length === 0);
+  // Ушёл далеко — на вход, на первый ярус: комнату уже не видно.
+  await vz(page, ([p]) => window.__vz.teleport(p[0], p[1], p[2]), [spawn]);
+  st = await vz(page, () => window.__vz.step(5));
+  check('побывал, ушёл далеко — комната изменилась', st.anomalies.alt.includes(variant.room), JSON.stringify(st.anomalies.alt));
+
+  // ── Рой ──
+  await vz(page, () => window.__vz.phase(0));
+  // Идёт поиск вещи: рой, который поймает игрока, заставит её «забыться».
+  await vz(page, () => window.__vz.reveal());
+  st = await vz(page, () => window.__vz.step(5));
+  const mem0 = await vz(page, () => window.__vz.memory());
+  check('идёт поиск воспоминания: вещь появилась и её видно в списке', mem0 !== null && st.session.memories.filter((m) => m.state === 'active').length === 1, JSON.stringify(mem0));
+  const sporesBefore = (await vz(page, () => window.__vz.spores())).filter((q) => q.kind === 'floor').length;
+  const ok = await vz(page, () => window.__vz.swarm('release', 5));
+  st = await state(page);
+  check('рой выпущен в пяти клетках и знает, где игрок', ok && (st.swarm.mode === 'stalk' || st.swarm.mode === 'cohere') && st.swarm.awareness > 0.5, st.swarm.mode);
+  for (let i = 0; i < 60 && st.swarm.mode !== 'hunt'; i++) st = await vz(page, () => window.__vz.step(20));
+  check('рой подошёл на свет и собрался в фигуру', st.swarm.mode === 'hunt' && st.swarm.cohesion === 1 && st.swarm.near > 0.15, `${st.swarm.mode}, сцепление ${st.swarm.cohesion.toFixed(2)}, близость ${st.swarm.near.toFixed(2)}`);
+  // Аудит объяснений (квиз 17.11): с фонарём подсказки про Осыпь нет — луч объясняет себя сам (она отступает
+  // и рассыпается под ним). Подсказка «взгляд держит её» — только у того, у кого света нет (app.ts, teach).
+  const swarmHint = await page.waitForFunction(() => /Взгляд держит/.test(document.querySelector('.vz-hud__toast.is-on')?.textContent ?? ''), null, { timeout: 6000 }).then(() => true, () => false);
+  check('с фонарём подсказки про Осыпь нет: луч объясняет себя сам', !swarmHint);
+  // Грибы («Когда он появляется, все начинает прорастать грибами вокруг… в углах как знак»).
+  {
+    const grown = await vz(page, () => window.__vz.spores());
+    const corners = grown.filter((q) => q.kind === 'corner').length;
+    const field = grown.filter((q) => q.kind === 'floor').length;
+    check('где Осыпь, там грибы: в углах поблизости — знак, на полу вокруг неё самой — поле; пока она спала, поля не было', sporesBefore === 0 && corners >= 1 && field >= 1, `до: на полу ${sporesBefore}; теперь: в углах ${corners}, на полу ${field}`);
+  }
+  for (let i = 0; i < 80 && st.swarm.mode === 'hunt' && st.jump?.cause !== 'caught'; i++) st = await aimAndStep(6);
+  check('прямой луч развалил рой, игрок цел', st.swarm.mode === 'scatter' && st.swarm.aggravation === 1 && st.jump?.cause !== 'caught', `${st.swarm.mode}, скачок ${JSON.stringify(st.jump)}`);
+  // Проявленная лучом, Осыпь три секунды течёт по пути к искомой вещи — подсказка, куда идти.
+  const flowAt = st.swarm.flow;
+  st = await vz(page, () => window.__vz.step(100));
+  const flowMid = st.swarm.flow;
+  st = await vz(page, () => window.__vz.step(100));
+  check('проявленная, она три секунды течёт к искомой вещи, потом течение кончается', flowAt !== null && flowAt < 0.5 && flowMid !== null && flowMid > 1.4 && st.swarm.flow === null && st.swarm.mode === 'scatter', `течение ${flowAt} → ${flowMid} → ${st.swarm.flow}, ${st.swarm.mode}`);
+  for (let i = 0; i < 90 && st.swarm.mode !== 'hunt' && st.jump?.cause !== 'caught'; i++) st = await vz(page, () => window.__vz.step(20));
+  check('рой вернулся и снова охотится', st.swarm.mode === 'hunt' && st.jump?.cause !== 'caught', st.swarm.mode);
+  // Гасим фонарь: в темноте рой, который уже знает, где игрок, добирается быстро. Поимка — не конец.
+  await vz(page, () => window.__vz.toggleLight());
+  const before = await state(page);
+  const spotBefore = before.session.memories.find((m) => m.state === 'active').spot;
+  const nodeBefore = before.node;
+  const timeBefore = before.time;
+  const others = [];
+  st = before;
+  for (let i = 0; i < 400 && st.jump?.cause !== 'caught'; i++) {
+    st = await vz(page, () => window.__vz.step(5));
+    if (st.jump && st.jump.cause !== 'caught' && !others.includes(st.jump.cause)) others.push(st.jump.cause);
+  }
+  check('с погашенным фонарём Осыпь ловит игрока: скачок «caught» затемнением — в начало', st.jump?.cause === 'caught' && st.jump.style === 'blackout' && st.jump.to === 'elsewhere' && st.jump.dest === 'start', `скачок ${JSON.stringify(st.jump)}, другие: ${others.join(',')}, рой ${st.swarm.mode}`);
+  st = await stepUntil(page, (s) => s.jump === null, 10, 30);
+  const mem1 = await vz(page, () => window.__vz.memory());
+  const active1 = st.session.memories.find((m) => m.state === 'active');
+  check('поимка — не конец: убежище, запись идёт, отчёта и гибели нет', st.where === 'main' && st.screen === 'play' && st.overlay === 'hidden' && st.session.over === false && st.time > timeBefore && !!active1, JSON.stringify({ where: st.where, screen: st.screen, overlay: st.overlay, over: st.session.over }));
+  const startAt = (await vz(page, () => window.__vz.level())).spawn;
+  check('Осыпь вернула игрока в начало: он стоит там, где вылазка началась; на экране — «снова там, где начал»', Math.hypot(st.pos[0] - startAt[0], st.pos[2] - startAt[2]) < 0.4 && (await page.textContent('.vz-hud__toast')) === RU['toast.caught'], `игрок ${st.pos.map((v) => v.toFixed(1)).join(', ')}, начало ${startAt.map((v) => v.toFixed(1)).join(', ')}, узел ${nodeBefore} → ${st.node}, строка «${await page.textContent('.vz-hud__toast')}»`);
+  check('искомая вещь осталась на месте: её не «забыли», идти за ней надо заново', !!active1 && !!spotBefore && Math.hypot(active1.spot[0] - spotBefore[0], active1.spot[2] - spotBefore[2]) < 0.05 && !!mem1 && Math.hypot(mem1.pos[0] - mem0.pos[0], mem1.pos[2] - mem0.pos[2]) < 0.05, `место ${JSON.stringify(spotBefore)} → ${JSON.stringify(active1?.spot)}`);
+  check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+
+  await scenarioRooms(browser, baseUrl);
+}
+
+/** Особенности помещений: тонкое место, строб (и мягкий строб), тёмное помещение, красная сетка. */
+async function scenarioRooms(browser, baseUrl) {
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&rank=3&seed=20041113');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  // Тонкое помещение: постоял — оно рассыпается (скачок тоже нужна выдержка: не раньше 50 с сессии).
+  let st = await vz(page, () => window.__vz.step(52 * 60));
+  const thin = await vz(page, () => window.__vz.gotoFx('thin'));
+  st = await stepUntil(page, (s) => s.jump !== null, 10, 60);
+  check('тонкое помещение рассыпается, если в нём постоять: скачок dissolve в карман', thin && st.jump?.cause === 'thin' && st.jump.style === 'dissolve', JSON.stringify({ thin, jump: st.jump, fx: st.roomFx }));
+  st = await stepUntil(page, (s) => s.where === 'pocket', 20, 30);
+  // Карман — любой из тех, куда уносит случайный скачок (поле подсолнухов — с PR #10); песчаный зал — только через чёрный проём.
+  check('и игрок оказывается в карманном пространстве', st.where === 'pocket' && ['void', 'meadow', 'dollhouse', 'sunfield'].includes(st.pocket), `${st.where}/${st.pocket}`);
+  await vz(page, () => window.__vz.jump('elsewhere', 'cut'));
+  st = await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 20, 30);
+  await vz(page, () => window.__vz.calm(true));
+
+  // Какие помещения «обычные» (без особенностей): с ними сравниваем.
+  const lvl = await vz(page, () => window.__vz.level());
+  const plain = [];
+  for (const r of lvl.rooms) {
+    if (!['living', 'command', 'kitchen', 'medical', 'bedroom', 'nursery', 'storage'].includes(r.type) || plain.length >= 3) continue;
+    await vz(page, (id) => window.__vz.gotoRoom(id), r.id);
+    const s = await vz(page, () => window.__vz.step(2));
+    if (s.roomFx === null) plain.push(r.id);
+  }
+  // Красноту кадра меряем при выключенном фонаре: кирпичная кладовая и бордовый ковёр в луче красные
+  // сами по себе, а сетка светится и без света. Ждём восемь секунд: первые семь место ещё держится
+  // в памяти — со своими цветами.
+  const redInDark = async () => {
+    await vz(page, () => window.__vz.toggleLight());
+    await vz(page, () => window.__vz.step(480));
+    const col = await vz(page, () => window.__vz.probeColor());
+    await vz(page, () => window.__vz.toggleLight());
+    await vz(page, () => window.__vz.step(20));
+    return col.red;
+  };
+  const look = async (room) => {
+    await vz(page, (id) => window.__vz.gotoRoom(id), room);
+    const s = await vz(page, () => window.__vz.step(100));
+    const grid = await vz(page, () => window.__vz.probe());
+    return { s, grid, red: await redInDark() };
+  };
+  const norms = [];
+  for (const id of plain) norms.push(await look(id));
+  const normCenter = mean(norms.map((n) => center(n.grid)));
+  const normRed = Math.max(...norms.map((n) => n.red));
+  check('для сравнения нашлись три обычных помещения без красной сетки', norms.length === 3 && normRed < 0.01 && norms.every((n) => n.s.fx.wire < 0.02), `помещения ${plain.join(',')}, красного ${normRed.toFixed(4)}`);
+
+  // Тёмное помещение: фонарь не светит, при этом проступает красная сетка.
+  const darkRoom = await vz(page, () => window.__vz.gotoFx('dark'));
+  st = await vz(page, () => window.__vz.step(120));
+  const dg = await vz(page, () => window.__vz.probe());
+  const dc = await vz(page, () => window.__vz.probeColor());
+  check('тёмное помещение: фонарь включён, но не светит — центр кадра темнее, чем в обычном помещении', darkRoom && st.roomFx === 'dark' && st.light.state === 'on' && st.fx.light < 0.1 && center(dg) < normCenter * 0.8, `центр ${center(dg).toFixed(1)} против ${normCenter.toFixed(1)}, свет помещения ${st.fx.light.toFixed(2)}`);
+  // Сетка — только изломы и края, без диагоналей треугольников (аудит мест: все рёбра читались знаком «нет
+  // картинки»), поэтому красных точек в кадре меньше, чем было: порог по доле — 0,4 %.
+  check('в тёмном помещении проступает красная сетка', dc.red > 0.004 && dc.red > normRed * 5, `красного ${dc.red.toFixed(4)} против ${normRed.toFixed(4)}`);
+
+  // Красная сетка без темноты.
+  const wireRoom = await vz(page, () => window.__vz.gotoFx('wire'));
+  st = await vz(page, () => window.__vz.step(120));
+  const wg = await vz(page, () => window.__vz.probe());
+  const wc = { red: await redInDark() };
+  check('помещение с сеткой: красного в кадре больше, чем в обычном; фонарь светит', wireRoom && st.roomFx === 'wire' && st.fx.wire > 0.3 && wc.red > normRed + 0.01 && st.fx.light > 0.9 && Math.max(...wg) > 60, `красного ${wc.red.toFixed(4)} против ${normRed.toFixed(4)}, сетка ${st.fx.wire.toFixed(2)}`);
+
+  // Строб: вспышки всегда мягкие (слова партнёра 19.11: «вспышки всегда мягкие или почти незаметные, настрйку Полные убери»):
+  // сила света плывёт без скачков; «почти незаметные» — ещё тише. Силу считаем по состоянию игры на каждом шаге (её не
+  // надо читать с экрана), а картинку подтверждаем несколькими кадрами: чтение пикселей в программном рендере медленное.
+  const series = () =>
+    vz(page, () => {
+      const out = [];
+      for (let i = 0; i < 240; i++) out.push(window.__vz.step(1).fx.strobe);
+      return out;
+    });
+  const rises = (s, d) => s.flatMap((x, i) => (i > 0 && x - s[i - 1] > d ? [i] : []));
+  const jumpMax = (s) => Math.max(...s.slice(1).map((x, i) => Math.abs(x - s[i])));
+  const measure = async (faint) => {
+    await vz(page, (id) => window.__vz.gotoRoom(id), plain[0]);
+    await vz(page, () => window.__vz.step(300));
+    const there = await vz(page, () => window.__vz.gotoFx('strobe'));
+    await vz(page, (c) => window.__vz.faintFlash(c), faint);
+    const s0 = await vz(page, () => window.__vz.step(30));
+    return { there: there && s0.roomFx === 'strobe', s: await series() };
+  };
+  const faintRun = await measure(true);
+  const softRun = await measure(false);
+  const soft = softRun.s;
+  const faint = faintRun.s;
+  check('строб-комната нашлась', softRun.there && faintRun.there);
+  // Мягко — значит медленно, а не темно (куратор, пачка 50): удары есть, но набухают и гаснут, не чаще раза в секунду.
+  const pulses = rises(soft.map((x) => (x > 0.25 ? 1 : 0)), 0.5).length;
+  check('мягкий строб: комната дышит светом — удары есть, плавные (без ступеней), не чаще раза в секунду', pulses >= 2 && pulses <= 5 && jumpMax(soft) < 0.08 && Math.max(...soft) <= 0.52, `ударов ${pulses} за 4 с, наибольший шаг ${jumpMax(soft).toFixed(3)}, сила ${Math.max(...soft).toFixed(2)}`);
+  check('почти незаметные: удары впятеро тише мягких и тоже без ступеней', jumpMax(faint) < 0.02 && Math.max(...faint) <= 0.11, `сила ${Math.max(...faint).toFixed(3)}, шаг ${jumpMax(faint).toFixed(3)}`);
+  // Картинка: в ударе кадр светлее, чем между ударами, но не выбелен.
+  if ((await state(page)).light.state !== 'on') await vz(page, () => window.__vz.toggleLight());
+  await vz(page, () => window.__vz.faintFlash(false));
+  const frameAt = async (want) => {
+    for (let i = 0; i < 200; i++) {
+      const st = await vz(page, () => window.__vz.step(1));
+      if (want(st.fx.strobe)) return mean(await vz(page, () => window.__vz.probe()));
+    }
+    return null;
+  };
+  const peakF = await frameAt((v) => v > 0.42);
+  const lowF = await frameAt((v) => v < 0.01);
+  check('строб-комната: в ударе кадр светлее, но не выбелен', peakF !== null && lowF !== null && peakF > lowF + 1 && peakF < 230, `удар ${peakF?.toFixed(1)}, между ударами ${lowF?.toFixed(1)}`);
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+}
+
+/** Тексты воспоминания по его id из словаря. */
+const memText = (lang, id, kind) => lang[`mem.${id}.${kind}`];
+
+async function scenarioSession(browser, baseUrl) {
+  section('Сессия: вспышки воспоминаний, «вспомнил», лимбо, следующая сессия, перезагрузка');
+  // Без сида в адресе: место берётся из профиля и в нём же запоминается — так проверяется петля одного места (loop=1: сама игра
+  // теперь — сон из сцен, его проверяет scenarioScenes).
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&rank=1&loop=1');
+  let st = await state(page);
+  const lv1 = await vz(page, () => window.__vz.level());
+  const lines0 = await page.$$eval('.vz-overlay__line', (els) => els.map((e) => e.textContent));
+  check('заставка: только строка про сон, предупреждение — тихо внизу, заданий и счётчиков нет', st.screen === 'title' && lines0.length === 1 && lines0[0] === RU['title.how'] && (await page.textContent('.vz-overlay__note')) === RU['title.warn'] && (await page.$$eval('.vz-settings__note', (els) => els.length)) === 0, JSON.stringify(lines0));
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  st = await vz(page, () => window.__vz.step(5 * 60));
+  check('сессия началась; первые секунды заданий нет: ни воспоминаний, ни строк, ни вспышки', st.screen === 'play' && st.profile.sorties === 1 && st.session.memories.length === 5 && st.session.memories.every((m) => m.state === 'hidden') && (await page.evaluate(() => !document.querySelector('.vz-hud__goals').classList.contains('is-on') && !document.querySelector('.vz-hud__flash').classList.contains('is-on'))), JSON.stringify(st.session.memories.map((m) => m.state)));
+  check('на ПК нет кнопок действия и списка на экране', await page.evaluate(() => !document.querySelector('.vz-touch') && !document.querySelector('.vz-hud__act.is-on')));
+  // Заряд батарейки фонаря на экране — там, где фонарь есть (слова партнёра 16.11 23:41: трясти до полного истощения батареи).
+  check('заряд батарейки виден, пока у места есть фонарь', (await page.evaluate(() => !!document.querySelector('.vz-hud__bat.is-on'))) === (st.hasLight === true), JSON.stringify({ hasLight: st.hasLight }));
+  // Заряд — обводкой вокруг значка фонаря (слова партнёра 17.11): дуга кольца — доля заряда.
+  {
+    const ring = await page.evaluate(() => {
+      const el = document.querySelector('.vz-hud__bat');
+      const arc = el?.querySelector('.vz-hud__bat-arc');
+      return { charge: el?.dataset.charge ?? null, dash: arc ? getComputedStyle(arc).strokeDasharray : null, icon: !!el?.querySelector('.vz-hud__bat-ring path') };
+    });
+    const want = String(Math.round(st.light.charge * 100));
+    check('заряд фонаря — дуга кольца вокруг его значка', ring.icon && ring.charge === want && (ring.dash ?? '').startsWith(want), JSON.stringify({ ...ring, want }));
+    // Заряд убывает — дуга короче; на последней четверти кольцо красное (is-low). Потом заряд как был.
+    const at = (x) =>
+      vz(
+        page,
+        (v) => {
+          window.__vz.charge(v);
+          window.__vz.step(2);
+          const el = document.querySelector('.vz-hud__bat');
+          return { charge: el.dataset.charge, low: el.classList.contains('is-low') };
+        },
+        x,
+      );
+    const mid = await at(0.4);
+    const low = await at(0.15);
+    await at(st.light.charge);
+    check('заряд убывает — дуга кольца короче; на последней четверти кольцо красное', mid.charge === '40' && !mid.low && low.charge === '15' && low.low, JSON.stringify({ mid, low }));
+  }
+  const ids1 = st.session.memories.map((m) => m.id);
+
+  // Клавиши E, R, Tab ничего не делают — ни без воспоминания, ни рядом с ним.
+  const brief = (s) => JSON.stringify({ m: s.session.memories.map((x) => `${x.id}:${x.state}`), hold: s.session.hold, things: s.things.map((t) => `${t.id}:${t.state}`), light: s.light.state, paused: s.paused, overlay: s.overlay, archive: s.archive, pos: s.pos.map((v) => +v.toFixed(2)) });
+  const pressKeys = async () => {
+    for (const code of ['KeyE', 'KeyR', 'Tab']) {
+      await page.keyboard.down(code);
+      await vz(page, () => window.__vz.tick(6));
+      await page.keyboard.up(code);
+    }
+    await vz(page, () => window.__vz.tick(2));
+  };
+  let b0 = brief(st);
+  await pressKeys();
+  check('клавиши E, R, Tab ничего не делают: ни движения, ни паузы, ни действий', brief(await state(page)) === b0, `${b0} → ${brief(await state(page))}`);
+  // Вызвать воспоминание и тем же обращением к странице прочитать вспышку. Она горит 5,2 с настоящего
+  // времени, а между вызовом и чтением у теста бывают десятки обращений: на медленной машине (CI)
+  // вспышка успевала погаснуть раньше, чем её читали.
+  const revealNow = async () => {
+    const r = await vz(page, () => {
+      window.__vz.reveal();
+      const s = window.__vz.step(5);
+      const el = document.querySelector('.vz-hud__flash');
+      return { st: s, flash: { on: el.classList.contains('is-on'), text: el.textContent } };
+    });
+    // Строка пришедшей вещи ждёт, пока догорит горящая — «вспомнил» прошлой вещи (hud.flash, queue; Z-19, приём 1): ждём её
+    // в самой странице, по настоящему времени, — до 5,2 с горения и 1,6 с угасания прошлой строки (CI 9a1a6da).
+    const active = r.st.session?.memories.find((m) => m.state === 'active');
+    const want = active ? memText(RU, active.id, 'flash') : null;
+    if (want && !(r.flash.on && r.flash.text === want)) {
+      const seen = await page
+        .waitForFunction(
+          (w) => {
+            const el = document.querySelector('.vz-hud__flash');
+            return el.classList.contains('is-on') && el.textContent === w ? { on: true, text: el.textContent } : false;
+          },
+          want,
+          { timeout: 12000, polling: 50 },
+        )
+        .then((h) => h.jsonValue())
+        .catch(() => null);
+      r.flash = seen ?? (await page.evaluate(() => {
+        const el = document.querySelector('.vz-hud__flash');
+        return { on: el.classList.contains('is-on'), text: el.textContent };
+      }));
+    }
+    return r;
+  };
+  let revealed = await revealNow();
+  st = revealed.st;
+  b0 = brief(st);
+  await pressKeys();
+  check('и когда воспоминание уже пришло, они ничего не берут и не снимают', brief(await state(page)) === b0 && (await state(page)).session.memories.some((m) => m.state === 'active'));
+  // Дальше — пять воспоминаний подряд; первое уже пришло.
+  let progress = true;
+  /** Место после первого круга: сид и стёртость (для проверки после перезагрузки). */
+  let lap = null;
+  for (let k = 0; k < 5; k++) {
+    if (k > 0) {
+      revealed = await revealNow();
+      st = revealed.st;
+    }
+    const mem = await vz(page, () => window.__vz.memory());
+    const active = st.session.memories.find((m) => m.state === 'active');
+    const flash = revealed.flash;
+    const rows = await page.$$eval('.vz-hud__goal', (els) => els.map((e) => ({ text: e.textContent, done: e.classList.contains('is-done') })));
+    const flashOk = !!active && flash.on && flash.text === memText(RU, active.id, 'flash');
+    // Искомое — полной фразой «Найди: …» (плейтест партнёра 19.11), вспомненное — одним словом, зачёркнутым.
+    const rowsOk = rows.length === k + 1 && rows.at(-1).text === RU['goal.find'].replace('{what}', memText(RU, active?.id, 'task')) && !rows.at(-1).done;
+    if (!(mem && flashOk && rowsOk)) progress = false;
+    check(`воспоминание ${k + 1}: на экране вспышка с текстом «${active ? memText(RU, active.id, 'flash') : '?'}», в списке слева появилась строка`, !!mem && flashOk && rowsOk, JSON.stringify({ mem, flash, rows: rows.length }));
+    if (wantShots && k === 0) {
+      mkdirSync(OUT, { recursive: true });
+      await saveShot(page, 'session_flash.png');
+    }
+    const near = await vz(page, () => window.__vz.gotoMemory());
+    await vz(page, () => window.__vz.step(20));
+    st = await vz(page, () => window.__vz.step(140));
+    const done = st.session.memories.find((m) => m.id === active?.id)?.state === 'done';
+    const thing = st.things.find((t) => t.id === mem?.thing);
+    const after = await page.evaluate(() => ({ text: document.querySelector('.vz-hud__flash').textContent, done: [...document.querySelectorAll('.vz-hud__goal.is-done')].length, rows: document.querySelectorAll('.vz-hud__goal').length }));
+    const ok = near && done && after.text === memText(RU, active.id, 'done') && after.done === k + 1 && !!thing && (thing.state === 'gone' || thing.dissolve > 0.15);
+    if (!ok) progress = false;
+    check(`воспоминание ${k + 1}: удержал взгляд — строка зачёркнута, текст «${active ? memText(RU, active.id, 'done') : '?'}», вещь рассыпалась`, ok, JSON.stringify({ near, done, after, thing: thing && { state: thing.state, dissolve: thing.dissolve } }));
+    if (!progress) break;
+  }
+
+  if (progress) {
+    // Всё вспомнено: чуть погодя место рассыпается и игрок в лимбо.
+    st = await stepUntil(page, (s) => s.jump !== null && s.jump.cause === 'end', 10, 60);
+    check('пять из пяти — место рассыпается (dissolve) и ведёт в лимбо', st.jump?.style === 'dissolve' && st.jump.to === 'limbo' && st.session.over === true && st.session.done === 5, JSON.stringify({ jump: st.jump, over: st.session.over, done: st.session.done }));
+    st = await stepUntil(page, (s) => s.where === 'limbo', 20, 30);
+    st = await vz(page, () => window.__vz.step(90));
+    const grid = await vz(page, () => window.__vz.probe());
+    check('лимбо: белое нигде — кадр светлый', st.where === 'limbo' && frameMean(grid) > 120, `среднее ${frameMean(grid).toFixed(1)}`);
+    const limbo = await page.$$eval('.vz-hud__limbo > div', (els) => els.map((e) => e.textContent));
+    const limboOn = await page.evaluate(() => document.querySelector('.vz-hud__limbo').classList.contains('is-on') && !document.querySelector('.vz-hud__goals').classList.contains('is-on'));
+    check('в лимбо видны строки: итог сессии, реплика, ожидание', limboOn && limbo.length === 3 && /^сессия 0001 закрыта\. сохранено воспоминаний: 5\.$/.test(limbo[0]) && limbo[2] === RU['limbo.wait'], JSON.stringify(limbo));
+    check('в лимбо копятся вспомненные вещи; закрытая сессия засчитана', st.things.length === 5 && st.archive.length === 5 && st.profile.successes === 1 && st.profile.archive.length === 5, JSON.stringify({ things: st.things.length, archive: st.archive.length, successes: st.profile.successes }));
+    if (wantShots) await saveShot(page, 'session_limbo.png');
+
+    // Приложение собирает следующую сессию, лимбо отпускает. Каждый круг рассказывает ту же цепочку
+    // (story.md, §7а): те же пять вещей в том же порядке, только место стёрто сильнее.
+    for (let i = 0; i < 50 && st.profile.sorties < 2; i++) {
+      st = await vz(page, () => window.__vz.step(60));
+      await sleep(150);
+    }
+    st = await vz(page, () => window.__vz.step(30));
+    const ids2 = st.session?.memories.map((m) => m.id) ?? [];
+    check('через несколько секунд началась новая сессия: та же цепочка воспоминаний, заданий снова нет', st.where === 'main' && st.profile.sorties === 2 && st.session.memories.every((m) => m.state === 'hidden') && ids2.length === 5 && ids2.join() === ids1.join() && st.session.time < 5, JSON.stringify({ where: st.where, sorties: st.profile.sorties, ids1, ids2 }));
+    check('на экране — название новой сессии, строк лимбо нет', (await page.textContent('.vz-hud__toast'))?.trim() === 'untitled session 0002' && (await page.evaluate(() => !document.querySelector('.vz-hud__limbo').classList.contains('is-on'))));
+    // Петля («Петля бесконечна, пока не сотрётся всё воспоминание»): место то же, но стёрто на круг.
+    const lv2 = await vz(page, () => window.__vz.level());
+    const w2 = await vz(page, () => window.__vz.wear());
+    lap = { seed: lv2.seed, wear: lv2.wear };
+    check('петля: следующая сессия — в том же месте (тот же сид, тот же план), стёртом на круг', lv2.seed === lv1.seed && lv2.rooms.length === lv1.rooms.length && lv2.wear >= 0.14 - 1e-6 && lv2.wear < 0.2 && Math.abs(w2.base - lv2.wear) < 1e-6 && st.profile.memories.shelter?.laps === 1, JSON.stringify({ seed: [lv1.seed, lv2.seed], rooms: [lv1.rooms.length, lv2.rooms.length], wear: lv2.wear, base: w2.base, memory: st.profile.memories.shelter }));
+    // Строка круга приходит после названия сессии (настоящее время, не шаги симуляции).
+    let line = null;
+    for (let i = 0; i < 60; i++) {
+      line = await page.evaluate(() => {
+        const el = document.querySelector('.vz-hud__flash');
+        return { on: el.classList.contains('is-on'), text: el.textContent };
+      });
+      if (line.on && line.text === RU['loop.lap.2']) break;
+      await sleep(150);
+    }
+    check(`петля: в начале второго круга игра говорит «${RU['loop.lap.2']}»`, line.on && line.text === RU['loop.lap.2'], JSON.stringify(line));
+  }
+
+  // Перезагрузка: счётчики на заставке сохранились.
+  await sleep(400);
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
+  const cnt = await page.$$eval('.vz-settings__note', (els) => els.map((e) => e.textContent));
+  check('после перезагрузки в списке настроек: закрыто сессий — 1, сохранено воспоминаний — 5', cnt.some((l) => /закрыто сессий: 1 · сохранено воспоминаний: 5 из \d+/.test(l)), JSON.stringify(cnt));
+  if (lap) {
+    const lv3 = await vz(page, () => window.__vz.level());
+    check('после перезагрузки место то же и стёрто так же: петля записана в профиле', lv3.seed === lap.seed && lv3.wear >= lap.wear - 1e-6 && lv3.wear < lap.wear + 0.05, JSON.stringify({ seed: [lap.seed, lv3.seed], wear: [lap.wear, lv3.wear] }));
+  }
+  check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0, (await vz(page, () => window.__vz.missingKeys())).join(', '));
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+
+  await scenarioHonest(browser, baseUrl);
+  await scenarioThings(browser, baseUrl);
+  await scenarioPockets(browser, baseUrl);
+}
+
+/** Честный прогон без подсказок: ничего не подталкиваем, симуляции не больше 40 секунд. */
+async function scenarioHonest(browser, baseUrl) {
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&rank=1&seed=777');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  let st = await vz(page, () => window.__vz.step(28 * 60));
+  check('честный прогон: за 28 секунд воспоминаний нет', st.session.memories.every((m) => m.state === 'hidden') && (await vz(page, () => window.__vz.memory())) === null, `${st.time.toFixed(1)} с`);
+  // Игрок смотрит на мелкую вещь сна: это и есть повод для первой вспышки.
+  const things = await vz(page, () => window.__vz.things());
+  const small = things.find((t) => !t.memory && SMALL_THINGS.includes(t.kind) && (t.fate === 'shrink' || t.fate === 'dust'));
+  st = await vz(page, () => window.__vz.step(3 * 60));
+  const near = !!small && (await vz(page, (id) => window.__vz.gotoThing(id, 2.4), small.id));
+  st = await vz(page, () => window.__vz.step(90));
+  const mem = await vz(page, () => window.__vz.memory());
+  check('честный прогон: к тридцатой секунде игрок засмотрелся на вещь — пришло первое воспоминание само', near && mem !== null && st.session.memories.some((m) => m.state === 'active') && st.time >= 30 && st.time < 40, JSON.stringify({ near, time: st.time, mem }));
+  await vz(page, () => window.__vz.gotoMemory());
+  st = await vz(page, () => window.__vz.step(130));
+  check('честный прогон: вспомнил — за сорок секунд симуляции', st.session.done === 1 && st.time < 40, `${st.time.toFixed(1)} с, вспомнено ${st.session.done}`);
+  check('честный прогон: нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+}
+
+/**
+ * Сон из сцен — сама игра (17.11, вечер: «Делай перемешивание пространств»; 16.11: «перемешивать пространства при каждом
+ * скачке… игрок не может выбирать локацию»): кнопки «Место» нет; скачок «куда-нибудь» уносит в другое место, вещь
+ * оставленного ждёт в его цепочке; вспомнил — другое место; три вещи сна — лимбо, и следующий сон начнётся в другом месте.
+ */
+async function scenarioScenes(browser, baseUrl) {
+  section('Сон из сцен: место не выбирают; скачок уносит в другое место; вспомнил — другое место; три вещи — лимбо');
+  // Вторая сессия игрока: первая — вся в убежище (учит закону), со второй места перемешиваются.
+  const profile = { v: 1, sorties: 1, successes: 1, archive: [], baseSeed: 20041113, muted: false, sens: 1, bright: 1, calm: false, lang: null, place: 'shelter', memories: {} };
+  // Профиль кладётся туда, откуда его читает площадка: web-plain — localStorage с приставкой игры; сборка Playgama — хранилище
+  // Bridge, которое на mock-площадке при первом чтении забирает значение из localStorage по голому ключу («profile»). Без второго
+  // ключа сборка Playgama видела пустой профиль — первый сон игрока, одна сцена убежища (CI, 7a3582d).
+  const prepare = (ctx) =>
+    ctx.addInitScript((p) => {
+      try {
+        localStorage.setItem('vylazka:profile', JSON.stringify(p));
+        localStorage.setItem('profile', JSON.stringify(p));
+      } catch {
+        /* без хранилища — профиль по умолчанию */
+      }
+    }, profile);
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&rank=1', {}, null, prepare);
+  let st = await state(page);
+  await openSettings(page);
+  check('заставка: кнопки «Место» нет и в списке настроек — место выбирает сон', st.scenes.on && (await page.isVisible('.vz-settings')) && !(await page.isVisible('.vz-overlay__opt--place')), JSON.stringify(st.scenes));
+  await closeSettings(page);
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  // Следующая сцена собирается в фоне, по настоящим часам.
+  // Место собирается вокруг игрока 1,6 с — пока идёт этот переход, скачок не начинается: шагаем две секунды.
+  const queued = async () => {
+    let s = await vz(page, () => window.__vz.step(120));
+    for (let i = 0; i < 60 && !s.scenes.queued; i++) {
+      await sleep(250);
+      s = await state(page);
+    }
+    return s;
+  };
+  st = await queued();
+  const world = async () => (await vz(page, () => window.__vz.level())).world;
+  const w0 = await world();
+  check('сон начался в убежище; следующая сцена уже собрана — в другом месте', w0 === 'shelter' && st.scenes.queued && st.scenes.next !== null && st.scenes.next !== 'shelter' && st.session.memories.length === 1, JSON.stringify({ w0, ...st.scenes }));
+  const chain0 = st.profile.memories.shelter?.chain ?? 0;
+  // Скачок «куда-нибудь» (как погасил и зажёг свет) — вокруг другое место; вещь убежища не вспомнена и ждёт.
+  const want = st.scenes.next;
+  await vz(page, () => window.__vz.jump('elsewhere', 'cut'));
+  st = await stepUntil(page, (s) => s.scenes.scene === 1, 20, 30);
+  const w1 = await world();
+  // Камера переключилась: у нового места свой номер камеры, и несколько секунд рядом с ним — имя места (не заголовок уровня).
+  {
+    const cam = await page.evaluate(() => document.querySelector('.vz-hud__cam')?.textContent ?? '');
+    const want = RU['hud.cam.with'].replace('{cam}', RU[`hud.cam.${w1}`]).replace('{place}', RU[`cam.place.${w1}`]);
+    check('камера переключилась: номер камеры нового места и его имя рядом', cam === want, JSON.stringify({ cam, want }));
+  }
+  check('скачок унёс в другое место: следующая сцена сна; вещь убежища ждёт в его цепочке', st.scenes.scene === 1 && w1 === want && st.scenes.done === 0 && (st.profile.memories.shelter?.chain ?? 0) === chain0 && st.where === 'main', JSON.stringify({ w1, want, ...st.scenes, chain: st.profile.memories.shelter?.chain, where: st.where }));
+  // Три вещи сна: каждая вспомненная уносит в другое место; строка задания называет место.
+  const seen = [w0, w1];
+  for (let k = 1; k <= 3; k++) {
+    st = await queued();
+    await vz(page, () => window.__vz.reveal());
+    st = await stepUntil(page, (s) => s.session.memories.some((m) => m.state === 'active'), 10, 30);
+    const here = await world();
+    const near = await vz(page, () => window.__vz.gotoMemory());
+    // Взгляд держит вещь и чуть водит из стороны в сторону: в офисе и жёлтых комнатах панели гаснут над тем, кто замер.
+    for (let i = 0; i < 40 && st.scenes.done < k; i++) st = await vz(page, (d) => window.__vz.step(6, { lookYaw: d }), i % 2 ? 0.02 : -0.02);
+    check(`вещь сна ${k} вспомнена (${here})`, near && st.scenes.done === k, JSON.stringify({ near, ...st.scenes, hold: st.session.hold }));
+    if (k < 3) {
+      st = await stepUntil(page, (s) => s.scenes.scene === seen.length, 20, 40);
+      const w = await world();
+      check(`вспомнил — свет погас, и вокруг другое место (${here} → ${w})`, w !== here && st.where === 'main', JSON.stringify({ here, w, ...st.scenes }));
+      seen.push(w);
+    }
+  }
+  st = await stepUntil(page, (s) => s.where === 'limbo', 20, 40);
+  // Лимбо просит следующую сессию, когда переход в него закончился: тогда же записывается, где начнётся следующий сон.
+  st = await stepUntil(page, (s) => s.profile.successes === 2, 20, 30);
+  check('три вещи сна — лимбо; следующий сон — в другом месте, и это записано', st.where === 'limbo' && st.profile.successes === 2 && st.scenes.world !== seen[seen.length - 1], JSON.stringify({ where: st.where, successes: st.profile.successes, next: st.scenes.world, seen }));
+  check('за сон побывали минимум в трёх разных местах', new Set(seen).size >= 3, JSON.stringify(seen));
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+
+  // Сцена — кусок места (квиз 17.11, поздний вечер; world/piece.ts). В первом сне куска нет (он учит во всём убежище) — ?piece=1
+  // включает его сразу: страница своя, после закрытия прошлой (две разом программная отрисовка не тянет).
+  {
+    const pp = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&piece=1');
+    // Журнал показанных строк (hud.toast пишет текст, только когда строка загорается). Строка края ждёт конца вспышки
+    // начала сессии и горит 4,2 с настоящего времени, а проверка смотрела на неё по кадрам страницы: на медленной машине CI
+    // кадры программной отрисовки длинные, и окно проскакивало между ними. Так упал CI на 1c63096 (сборка Playgama): строка
+    // была показана — её текст висел погасшим, — а проверка её не застала. Журнал ловит строку в любой момент.
+    await vz(pp.page, () => {
+      const el = document.querySelector('.vz-hud__toast');
+      window.__toasts = [];
+      if (el) new MutationObserver((recs) => { for (const r of recs) for (const n of r.addedNodes) if (n.nodeType === 3) window.__toasts.push(n.data); }).observe(el, { childList: true });
+    });
+    await pp.page.click('.vz-overlay');
+    await sleep(300);
+    await vz(pp.page, () => window.__vz.freeze(true));
+    await vz(pp.page, () => window.__vz.calm(true));
+    // Переход начала сессии (1,6 с) должен кончиться: пока он идёт, край не проверяется.
+    await vz(pp.page, () => window.__vz.step(150));
+    const piece = await vz(pp.page, () => window.__vz.piece());
+    check('сцена — кусок места: помнится от одной до шести комнат и есть край, за которым память обрывается', !!piece && piece.rooms >= 1 && piece.rooms <= 6 && piece.cells > 4 && piece.edge.length > 0, JSON.stringify(piece && { rooms: piece.rooms, cells: piece.cells, edge: piece.edge.length }));
+    if (piece && piece.edge.length > 0) {
+      // Встать на край лицом к обрыву: строка «дальше не помню». Сказана ли она раньше (если сон начался лицом к обрыву) —
+      // в подробностях проверки.
+      const edgeLine = RU['toast.edge'];
+      const atStart = await vz(pp.page, (w) => window.__toasts.includes(w), edgeLine);
+      const e = piece.edge[0];
+      const yaw = Math.atan2(-(e.to[0] - e.at[0]), -(e.to[2] - e.at[2]));
+      await vz(pp.page, ([p, y]) => window.__vz.teleport(p[0], p[1], p[2], y, -0.1), [e.at, yaw]);
+      await vz(pp.page, () => window.__vz.step(30));
+      // Строка ждёт, пока горит вспышка начала сессии (hud.toast): ждём её по условию, а не по времени.
+      const said = await pp.page.waitForFunction((w) => window.__toasts.includes(w), edgeLine, { timeout: 12000, polling: 200 }).then(() => true, () => false);
+      const toasts = await vz(pp.page, () => window.__toasts.slice(-6));
+      check('у края, глядя в обрыв, — строка «…дальше не помню»', said, JSON.stringify({ atStart, toasts }));
+      // Шаг за край обрывает сцену: следующей сцены в первом сне нет — память возвращает в кусок.
+      await vz(pp.page, ([p]) => window.__vz.teleport(p[0], p[1], p[2]), [e.to]);
+      const after = await stepUntil(pp.page, (x) => x.where === 'main' && x.jump === null, 20, 30);
+      const back = await vz(pp.page, () => window.__vz.piece());
+      check('шаг за край памяти — скачок; следующей сцены нет — игрок снова в куске, картинка есть', after.where === 'main' && !!back && Math.max(...(await vz(pp.page, () => window.__vz.probe()))) > 10, JSON.stringify({ where: after.where, jump: after.jump }));
+    }
+    check('кусок места: нет ошибок в консоли (шейдеры маски собрались)', pp.log.errors.length === 0, pp.log.errors.join(' | ').slice(0, 400));
+    await pp.context.close();
+  }
+}
+
+/** Вещи под взглядом и скачки в карманные пространства. */
+/**
+ * Ступени погружения (предложения 17.11, партнёр: «Далее делай предложенные рекомендации по гемплею»): на ступени скачков (2)
+ * впереди входа стоит вещь, ведущая на луг; первые секунды она только стоит, потом от взгляда уносит на луг, и луг
+ * отпускает быстро. Раньше это было на нулевой ступени — необъяснённый перенос в первую минуту путал новичков (плейтест
+ * партнёра 19.11). Ступень задаётся адресом (?stage=2), как и #stage2 в ссылке у партнёра.
+ */
+async function scenarioStages(browser, baseUrl) {
+  section('Ступени погружения: холодный старт на ступени скачков');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&stage=2');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  let st = await vz(page, () => window.__vz.step(30));
+  // Первый сон игрока — одна сцена убежища с тремя вещами: место не меняется, следующую сцену не собирают (pressure.md §4.7).
+  await sleep(1500);
+  {
+    const first = await state(page);
+    const world = (await vz(page, () => window.__vz.level())).world;
+    check('первый сон: убежище, одна сцена с тремя вещами, следующая сцена не собирается', world === 'shelter' && first.scenes.on && first.session.memories.length === 3 && !first.scenes.queued, JSON.stringify({ world, scenes: first.scenes, n: first.session.memories.length }));
+  }
+  const cold = (await vz(page, () => window.__vz.things())).find((t) => t.fate === 'jump' && t.still);
+  check('ступень скачков: впереди входа стоит вещь, ведущая на луг, и пока только стоит', !!cold && st.where === 'main', JSON.stringify(cold ?? null));
+  if (cold) {
+    const near = await vz(page, (id) => window.__vz.gotoThing(id, 3), cold.id);
+    st = await vz(page, () => window.__vz.step(10 * 60));
+    const still = (await vz(page, () => window.__vz.things())).find((t) => t.id === cold.id);
+    check('первые секунды — обычная жизнь: вещь в луче, но не меняется', near && st.where === 'main' && still?.state === 'idle' && still.gaze > 0.9, JSON.stringify({ near, where: st.where, thing: still }));
+    st = await stepUntil(page, (s) => s.where === 'pocket', 30, 30);
+    check('потом от взгляда она растёт и уносит на луг', st.where === 'pocket' && st.pocket === 'meadow', JSON.stringify({ where: st.where, pocket: st.pocket }));
+    st = await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 60, 30);
+    check('луг после холодного старта отпускает быстро (около 20 с)', st.where === 'main', JSON.stringify({ where: st.where, stay: st.pocketInfo?.stay }));
+  }
+  // Миг (квиз 17.11): место стёрто до конца — часы встают на 00:00:00, REC гаснет, кадр обрывается в черноту и возвращается.
+  await vz(page, () => window.__vz.moment());
+  await sleep(250);
+  const cut = await page.evaluate(() => ({
+    on: document.querySelector('.vz-hud')?.classList.contains('is-cut') ?? false,
+    clock: document.querySelector('.vz-hud__clock')?.textContent ?? '',
+    rec: getComputedStyle(document.querySelector('.vz-hud__rec')).visibility,
+    black: getComputedStyle(document.querySelector('.vz-hud__cut')).opacity,
+  }));
+  check('миг: часы на 00:00:00, REC погас, кадр чёрный', cut.on && cut.clock.endsWith('00:00:00') && cut.rec === 'hidden' && cut.black === '1', JSON.stringify(cut));
+  await sleep(3400);
+  const back = await page.evaluate(() => document.querySelector('.vz-hud')?.classList.contains('is-cut') ?? true);
+  check('после мига кадр возвращается', !back, String(back));
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+  await context.close();
+}
+
+async function scenarioThings(browser, baseUrl) {
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&touch=0&seed=20041113&rank=2');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  let st = await vz(page, () => window.__vz.step(150));
+  const things = await vz(page, () => window.__vz.things());
+  check('в убежище стоят вещи сна: мелкие и крупные, с разными судьбами', things.length >= 8 && ['shrink', 'dust', 'grow', 'jump'].every((f) => things.some((t) => t.fate === f)), things.map((t) => `${t.kind}/${t.fate}`).join(' '));
+  // Темнота меняет детали: пока фонарь не горит, место растворяется, и собраться прежним не обязано —
+  // мелкие вещи рядом меняются местами. Первые семь секунд (пока место ещё держится в памяти) всё стоит.
+  {
+    const small = things.filter((t) => !t.memory && t.state === 'idle' && SMALL_THINGS.includes(t.kind));
+    const close = (a, b) => Math.hypot(a.pos[0] - b.pos[0], a.pos[2] - b.pos[2]) < 10 && Math.abs(a.pos[1] - b.pos[1]) < 2;
+    const anchor = small.find((t) => small.some((o) => o.id !== t.id && close(o, t)));
+    const where = (list) => new Map(list.map((t) => [t.id, t.pos.map((v) => v.toFixed(2)).join(',')]));
+    const reached = anchor ? await vz(page, (id) => window.__vz.gotoThing(id, 2.4), anchor.id) : false;
+    // В темноте вещь меняется только вне кадра (K-21): подошёл — отвернулся и смотрит вверх, мелкие вещи рядом не на виду.
+    // look — приращение: развернуться — π, а не «курс + π» (тот разворачивал куда придётся; вещи прятал только взгляд вверх).
+    await vz(page, () => window.__vz.look(Math.PI, 0.9));
+    await vz(page, () => window.__vz.step(30));
+    const before = where(await vz(page, () => window.__vz.things()));
+    await vz(page, () => window.__vz.toggleLight());
+    st = await vz(page, () => window.__vz.step(390));
+    const held = where(await vz(page, () => window.__vz.things()));
+    check('свет погас: шесть секунд вещи стоят где стояли', reached && st.dark.for > 6 && st.dark.shifts === 0 && [...before].every(([id, p]) => held.get(id) === p), `темно ${st.dark.for.toFixed(1)} с, перемен ${st.dark.shifts}`);
+    st = await vz(page, () => window.__vz.step(90));
+    const shifted = where(await vz(page, () => window.__vz.things()));
+    const moved = [...before].filter(([id, p]) => shifted.get(id) !== p).length;
+    check('темнота затянулась — мелкие вещи рядом поменялись местами', st.dark.shifts >= 2 && moved >= 2 && [...shifted.values()].sort().join('|') === [...before.values()].sort().join('|'), `перемен ${st.dark.shifts}, вещей на новых местах ${moved}`);
+    await vz(page, () => window.__vz.toggleLight());
+    st = await vz(page, () => window.__vz.step(120));
+    const settled = where(await vz(page, () => window.__vz.things()));
+    check('свет вернулся — больше ничего не меняется', st.dark.for === 0 && [...shifted].every(([id, p]) => settled.get(id) === p), `темно ${st.dark.for.toFixed(1)} с`);
+  }
+
+  const watch = async (fate) => {
+    // Берём вещь, на которую ещё не смотрели: после темноты та, что была в кадре, остаётся на месте (в темноте меняется
+    // только то, чего нет в кадре, — K-21), и когда свет вернулся, она уже копит взгляд.
+    const fresh = (await vz(page, () => window.__vz.things())).filter((x) => x.state === 'idle' && x.gaze < 0.05);
+    const t = fresh.find((x) => x.fate === fate && !x.memory && SMALL_THINGS.includes(x.kind)) ?? fresh.find((x) => x.fate === fate && !x.memory);
+    if (!t) return null;
+    const near = await vz(page, (id) => window.__vz.gotoThing(id, 2.4), t.id);
+    return { t, near };
+  };
+  const now = (s, t) => s.things.find((x) => x.id === t.id);
+
+  let w = await watch('shrink');
+  st = await vz(page, () => window.__vz.step(165));
+  let cur = now(st, w.t);
+  check(`вещь «${w.t.kind}» под долгим взглядом уменьшается`, w.near && cur.state === 'changing' && cur.scale < 0.95 && cur.scale > 0, JSON.stringify(cur));
+  st = await vz(page, () => window.__vz.step(100));
+  check('и исчезает совсем', now(st, w.t).state === 'gone', JSON.stringify(now(st, w.t)));
+
+  w = await watch('dust');
+  st = await vz(page, () => window.__vz.step(165));
+  cur = now(st, w.t);
+  check(`вещь «${w.t.kind}» под долгим взглядом рассыпается в пыль`, w.near && cur.state === 'changing' && cur.dissolve > 0.05 && cur.scale === 1, JSON.stringify(cur));
+  st = await vz(page, () => window.__vz.step(120));
+  check('и её больше нет', now(st, w.t).state === 'gone' && now(st, w.t).dissolve === 1, JSON.stringify(now(st, w.t)));
+
+  w = await watch('grow');
+  st = await vz(page, () => window.__vz.step(165));
+  cur = now(st, w.t);
+  check(`вещь «${w.t.kind}» под долгим взглядом растёт`, w.near && cur.state === 'changing' && cur.scale > 1.1, JSON.stringify(cur));
+  // С 24.11 вещь растёт быстро и сразу в мелкую пыль (партнёр: «он быстро увеличивается и превращается в мелкую пыль»): смотрим
+  // раньше, пока пыль ещё уходит.
+  st = await vz(page, () => window.__vz.step(100));
+  cur = now(st, w.t);
+  // Выросшая вещь не остаётся: огромная, она рассыпается в пыль и растворяется частицами (слова партнёра 17.11).
+  check('выросла — и рассыпается в пыль: огромная, а частицы уже уходят', cur.state === 'changing' && cur.scale > 6.5 && cur.dissolve > 0.1 && cur.dissolve < 1 && st.where === 'main', JSON.stringify(cur));
+  if (wantShots) await saveShot(page, 'session_giant.png');
+  st = await vz(page, () => window.__vz.step(150));
+  check('и растворяется совсем', now(st, w.t).state === 'gone' && now(st, w.t).dissolve === 1 && st.where === 'main', JSON.stringify(now(st, w.t)));
+
+  // Вещь с судьбой jump вырастает и утягивает в карманное пространство.
+  w = await watch('jump');
+  st = await vz(page, () => window.__vz.step(150));
+  st = await stepUntil(page, (s) => s.where === 'pocket', 20, 30);
+  check(`крупная вещь «${w.t.kind}» утягивает в карманное пространство`, w.near && st.where === 'pocket' && ['void', 'meadow', 'dollhouse'].includes(st.pocket), JSON.stringify({ where: st.where, pocket: st.pocket, thing: now(st, w.t) }));
+  await vz(page, () => window.__vz.step(60));
+  // Оттуда игра возвращает: уйти за край.
+  st = await state(page);
+  await vz(page, ([p]) => window.__vz.teleport(p[0] + 150, p[1], p[2]), [st.pos]);
+  st = await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 20, 40);
+  check('уйти за край пространства — вернуться в убежище', st.where === 'main' && st.pocket === null && st.session.over === false, JSON.stringify({ where: st.where, pocket: st.pocket }));
+  // И дождаться: время пространства ограничено.
+  await vz(page, () => window.__vz.jump('meadow', 'cut'));
+  st = await stepUntil(page, (s) => s.where === 'pocket', 20, 20);
+  // Срок пространства — 46–60 с, выбирается случайно при входе; когда он вышел, место рассыпается и
+  // возвращает в убежище (1,6 + 1,2 с). Срок читается из состояния: проверка не зависит от того, какой
+  // он выпал. Ожидание идёт шагами по 1,25 с игрового времени: шагами по 5 с возврат замечался поздно, а
+  // за эти секунды убежище могло законно унести снова (тонкая комната, темнота) — и проверка видела карман.
+  const tIn = st.time - st.pocketInfo.age;
+  const stay = st.pocketInfo.stay;
+  const seen = [];
+  for (let i = 0; i < 64 && !(st.where === 'main' && st.jump === null); i++) {
+    st = await vz(page, () => window.__vz.step(75));
+    const mark = `${st.time.toFixed(1)}:${st.where}${st.jump ? `/${st.jump.cause}` : ''}`;
+    if (seen.at(-1)?.slice(mark.indexOf(':')) !== mark.slice(mark.indexOf(':'))) seen.push(mark);
+  }
+  const waited = st.time - tIn;
+  // Окно сверху: возврат (2,8 с) плюс шаг наблюдения (1,25 с) и запас 0,6 с — на CI возврат увидели через 4,2 с после срока
+  // (окно было 4,2 — на шаг наблюдения оставалось 0,15 с запаса, CI 17.11 на 29816e4).
+  check('можно просто подождать: карман отпускает, как только выходит его срок (46–60 с)', st.where === 'main' && stay >= 46 && stay <= 60 && waited >= stay + 2.7 && waited < stay + 2.8 + 1.25 + 0.6, `срок ${stay.toFixed(1)} с, прошло ${waited.toFixed(1)} с, ${st.where}; ${seen.join(' ')}`);
+
+  // Скачки в каждое пространство: картинка есть и не чёрная.
+  for (const [to, style] of [['void', 'whiteout'], ['meadow', 'dissolve'], ['dollhouse', 'blackout']]) {
+    await vz(page, ([t, s]) => window.__vz.jump(t, s), [to, style]);
+    st = await stepUntil(page, (s) => s.where === 'pocket' && s.jump === null, 20, 30);
+    st = await vz(page, () => window.__vz.step(60));
+    const g = await vz(page, () => window.__vz.probe());
+    check(`скачок в «${to}»: игрок там, картинка есть и не чёрная`, st.where === 'pocket' && st.pocket === to && frameMean(g) > 20 && Math.max(...g) > 100, `среднее ${frameMean(g).toFixed(1)}, максимум ${Math.max(...g).toFixed(0)}, ${st.where}/${st.pocket}`);
+    if (wantShots) await saveShot(page, `session_pocket_${to}.png`);
+    await vz(page, () => window.__vz.jump('elsewhere', 'cut'));
+    st = await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 20, 30);
+  }
+  check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  // У каждой вещи сна свой материал: раньше он делался копией материала мира, и three.js писал
+  // предупреждение на каждую вещь (в коридоре первого сценария вещей нет — там это было не видно).
+  {
+    const warns = log.warnings.filter((w) => !benign(w));
+    check('вещи сна и карманы не сыплют предупреждениями в консоль', warns.length === 0, `${warns.length}: ${[...new Set(warns)].join(' | ').slice(0, 300)}`);
+  }
+  await context.close();
+}
+
+/**
+ * Смысл карманных пространств: строка при входе и нижняя строка, макет в кукольном домике, красный проём
+ * как выход, болванки в белом нигде, дверь луга, редение к концу срока. Всё, что на экране живёт по
+ * настоящему времени (строка-вспышка горит несколько секунд), читается тем же page.evaluate, которым
+ * вызвано событие, а не отдельным обращением позже.
+ */
+async function scenarioPockets(browser, baseUrl) {
+  section('Карманные пространства: зачем они, как выйти, как виден счёт времени');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113&rank=2');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  let st = await vz(page, () => window.__vz.step(150));
+  const tierName = (y) => RU[`tier.${Math.min(2, Math.max(0, Math.round(-y / 4.5)))}`];
+  const hintText = () => page.$eval('.vz-hud__hint', (el) => el.textContent);
+  const rowsText = () => page.$$eval('.vz-hud__goal', (els) => els.map((e) => e.textContent));
+  /** Скачок в пространство; строка-вспышка читается в том же обращении, как только игрок оказался там. */
+  const enter = (to) =>
+    vz(
+      page,
+      (t) => {
+        window.__vz.jump(t, 'cut');
+        let s = window.__vz.step(3);
+        for (let i = 0; i < 120 && s.where !== 'pocket'; i++) s = window.__vz.step(3);
+        const el = document.querySelector('.vz-hud__flash');
+        return { st: s, flash: { on: el.classList.contains('is-on'), text: el.textContent } };
+      },
+      to,
+    );
+  /** Встать в проём выхода (не раньше 1,5 с после входа) и дождаться возвращения в убежище. */
+  const walkOut = async () => {
+    let s = await vz(page, () => window.__vz.step(100));
+    const e = s.pocketInfo?.exit;
+    if (!e) return { s, ok: false };
+    await vz(page, ([p, y]) => window.__vz.teleport(p[0], y, p[2]), [e, s.pos[1]]);
+    s = await stepUntil(page, (x) => x.where === 'main' && x.jump === null, 20, 60);
+    return { s, ok: true };
+  };
+  const leave = async () => {
+    await vz(page, () => window.__vz.jump('elsewhere', 'cut'));
+    return stepUntil(page, (x) => x.where === 'main' && x.jump === null, 20, 30);
+  };
+  /** Подойти к предмету и смотреть, пока пространство не сделает своё дело; вспышка читается тут же. */
+  const lookUntilDone = (fn, arg) =>
+    vz(
+      page,
+      ([name, a]) => {
+        const near = name === 'thing' ? window.__vz.gotoThing(a, 2.2) : window.__vz.gotoPocket(a);
+        let s = window.__vz.step(10);
+        for (let i = 0; i < 80 && !s.pocketInfo?.done; i++) s = window.__vz.step(10);
+        const el = document.querySelector('.vz-hud__flash');
+        return { near, done: s.pocketInfo?.done, flash: { on: el.classList.contains('is-on'), text: el.textContent }, rows: [...document.querySelectorAll('.vz-hud__goal')].map((e) => e.textContent) };
+      },
+      [fn, arg],
+    );
+
+  // ── Кукольный домик, когда искать нечего ──
+  check('перед проверками ничего не ищем', (await vz(page, () => window.__vz.memory())) === null);
+  let r = await enter('dollhouse');
+  check('кукольный домик без искомого: строка при входе «пока ничего не потеряно»', r.flash.on && r.flash.text === RU['pocket.dollhouse.enter.idle'], JSON.stringify(r.flash));
+  st = await vz(page, () => window.__vz.step(60));
+  check('в пространстве нижняя строка говорит, как выйти', (await hintText()) === RU['pocket.hint.exit'], await hintText());
+  check('в снимке есть выход и макет; срок 46–60 с, пространство ещё не редеет', !!st.pocketInfo?.exit && !!st.pocketInfo?.focus && st.pocketInfo.stay >= 46 && st.pocketInfo.stay <= 60 && st.pocketInfo.fade === 1, JSON.stringify(st.pocketInfo));
+  const idleMap = await lookUntilDone('pocket', 'focus');
+  check('макет без искомого: «ты был здесь, пока ничего не потеряно»', idleMap.done === true && idleMap.flash.on && idleMap.flash.text === RU['pocket.dollhouse.map.idle'], JSON.stringify(idleMap));
+  await leave();
+
+  // ── Кукольный домик с искомым: макет называет помещение и ярус ──
+  await vz(page, () => window.__vz.reveal());
+  st = await vz(page, () => window.__vz.step(5));
+  const mem = await vz(page, () => window.__vz.memory());
+  const task = mem ? RU[`mem.${mem.id}.task`] : '?';
+  const level = await vz(page, () => window.__vz.level());
+  const tier = mem ? Math.max(0, Math.round(-mem.pos[1] / 4.5)) : 0;
+  const nodeBefore = st.node;
+  r = await enter('dollhouse');
+  check('кукольный домик с искомым: строка при входе про огонёк на столе', !!mem && r.flash.on && r.flash.text === RU['pocket.dollhouse.enter'], JSON.stringify(r.flash));
+  const map = await lookUntilDone('pocket', 'focus');
+  const row = map.rows.at(-1) ?? '';
+  const lead = RU['goal.find'].replace('{what}', `${task} · `);
+  const roomName = row.startsWith(lead) ? row.slice(lead.length) : null;
+  const roomType = Object.keys(RU).find((k) => k.startsWith('room.') && RU[k] === roomName)?.slice(5);
+  const expectMap = RU['pocket.dollhouse.map'].replace('{what}', task).replace('{room}', roomName ?? '?').replace('{tier}', tierName(mem?.pos[1] ?? 0));
+  check('макет: на экране «что: помещение, ярус» — помещение настоящее, ярус — ярус вещи', map.done === true && map.flash.on && map.flash.text === expectMap && !!roomType && level.rooms.some((x) => x.type === roomType && x.tier === tier), JSON.stringify({ flash: map.flash.text, expectMap, roomType, tier }));
+  check('и в списке слева к искомому добавилось помещение', map.rows.length === 1 && roomName !== null, JSON.stringify(map.rows));
+  if (wantShots) await saveShot(page, 'session_pocket_dollhouse_map.png');
+  st = await state(page);
+  check('макет прочитан: пространство сделало своё дело — срок сокращён до «сейчас + 14 с»', st.pocketInfo.done === true && st.pocketInfo.stay <= st.pocketInfo.age + 14.1, JSON.stringify(st.pocketInfo));
+  // Красный проём — выход: проход сквозь него возвращает туда, откуда унесло.
+  const out = await walkOut();
+  check('проход сквозь красный проём возвращает в убежище, в тот же узел, откуда унесло', out.ok && out.s.where === 'main' && out.s.node === nodeBefore && out.s.pocket === null, JSON.stringify({ where: out.s.where, node: out.s.node, nodeBefore }));
+  check('помещение в списке слева остаётся, пока вещь не вспомнили', (await rowsText()).at(-1) === row, JSON.stringify(await rowsText()));
+
+  // ── Взгляд на проём ничего не делает: выйти можно только войдя в него ──
+  await enter('dollhouse');
+  await vz(page, () => window.__vz.gotoPocket('exit', 1));
+  st = await vz(page, () => window.__vz.step(12 * 60));
+  check('взгляд на красный проём с одного шага двенадцать секунд никуда не уносит', st.where === 'pocket' && st.jump === null, JSON.stringify({ where: st.where, jump: st.jump, age: st.pocketInfo?.age }));
+  await leave();
+
+  // ── Луг: дверь выводит рядом с искомой вещью ──
+  r = await enter('meadow');
+  check('луг: строка при входе про дверь, которая ближе к искомому', r.flash.on && r.flash.text === RU['pocket.meadow.enter'], JSON.stringify(r.flash));
+  // Игрок появляется лицом к двери: пока он просто стоит и смотрит, луг его не выбрасывает.
+  st = await vz(page, () => window.__vz.step(12 * 60));
+  check('кто просто стоит на лугу там, где появился, остаётся на лугу', st.where === 'pocket' && st.jump === null, JSON.stringify({ where: st.where, jump: st.jump, age: st.pocketInfo?.age }));
+  const door = await walkOut();
+  const dxz = Math.hypot(door.s.pos[0] - mem.pos[0], door.s.pos[2] - mem.pos[2]);
+  // Не дальше 4 клеток пути: клетка 3 м, четыре шага — до 12 м по горизонтали плюс разброс вещи в клетке
+  // (точный путь по графу проверяют юнит-тесты, здесь — что дверь вообще привела к вещи, а не «подальше»).
+  check('дверь луга выводит рядом с искомой вещью: не дальше 4 клеток пути', door.ok && door.s.where === 'main' && dxz <= 15 && Math.abs(door.s.pos[1] - mem.pos[1]) <= 9, JSON.stringify({ dxz: +dxz.toFixed(1), dy: door.s.pos[1] - mem.pos[1] }));
+  // Цела ли искомая вещь после двери: в CI она не раз оказывалась растворённой к следующей проверке (вещь «gone»), а
+  // здесь — нет. Строка показывает, кто виноват: дверь (тело село рядом и задело мебель), давление пола или что-то ещё.
+  const afterDoor = await vz(
+    page,
+    (id) => {
+      const s = window.__vz.state();
+      const t = s.things.find((x) => x.id === id);
+      const p = window.__vz.pressure();
+      // why — отчего растворилась (Thing.why): кто коснулся, когда (время игры) и где стоял игрок.
+      return { thing: t ? t.state : null, why: t?.why ?? null, at: t ? t.pos.map((v) => +v.toFixed(2)) : null, me: s.pos.map((v) => +v.toFixed(2)), room: s.room, pressure: p ? { count: p.count, active: p.active?.kind ?? null, room: p.active?.room ?? null } : null };
+    },
+    mem.thing,
+  );
+  check('после двери луга искомая вещь цела', afterDoor.thing === 'idle', JSON.stringify(afterDoor));
+
+  // ── Белое нигде: вспомненное и болванки ──
+  // Вспоминаем текущее воспоминание и сразу уходим в белое нигде: следующее ещё не пришло.
+  const before = await state(page);
+  const went = await vz(page, () => window.__vz.gotoMemory());
+  // Держим вещь в луче, пока она не вспомнится (обычно за 1,6 с), но не дольше 6 с; потом добираем до прежних
+  // 160 кадров, чтобы дальше всё шло как раньше. Каждые полсекунды — след: если вещь не вспомнилась, по нему видно
+  // почему (горел ли фонарь, в луче ли вещь и не заслонена ли, не растворилась ли она, не унесло ли игрока).
+  const held = await vz(
+    page,
+    (id) => {
+      const trace = [];
+      let s = window.__vz.state();
+      let used = 0;
+      for (let i = 0; i < 36 && s.session.done < 1; i++) {
+        s = window.__vz.step(10);
+        used += 10;
+        if (i % 3 === 2) {
+          const v = window.__vz.sees(id);
+          const t = s.things.find((x) => x.id === id);
+          trace.push({ t: +s.time.toFixed(1), hold: +s.session.hold.toFixed(2), light: +s.light.intensity.toFixed(2), thing: t ? t.state : null, dot: v && +v.dot.toFixed(3), need: v && +v.need.toFixed(3), los: v && +v.los.toFixed(2), d: v && +v.d.toFixed(2), where: s.where });
+        }
+      }
+      if (s.session.done >= 1 && used < 160) s = window.__vz.step(160 - used);
+      return { s, trace };
+    },
+    mem.thing,
+  );
+  st = held.s;
+  const first = mem.id;
+  check('вспомнено одно воспоминание, нового пока нет', st.session.done === 1 && (await vz(page, () => window.__vz.memory())) === null, JSON.stringify({ done: st.session.done, went, light: before.light, from: before.pos, afterDoor, trace: held.trace }));
+  const nodeVoid = st.node;
+  r = await enter('void');
+  check('белое нигде: строка при входе «это то, что ты сохранил»', r.flash.on && r.flash.text === RU['pocket.void.enter'], JSON.stringify(r.flash));
+  st = await state(page);
+  const things = await vz(page, () => window.__vz.things());
+  const blanks = st.pocketInfo.blanks;
+  const exhibits = things.filter((t) => Math.abs(Math.hypot(t.pos[0] - st.pos[0], t.pos[2] - st.pos[2]) - 3.4) < 0.06);
+  check('перед игроком дугой пять экспонатов: одна вещь и четыре белые болванки', exhibits.length === 5 && blanks.length === 4 && exhibits.filter((t) => t.kind === 'blank').length === 4 && exhibits.every((t) => (t.kind === 'blank') === blanks.includes(t.id)), JSON.stringify({ n: exhibits.length, blanks: blanks.length }));
+  if (wantShots) await saveShot(page, 'session_pocket_void_exhibits.png');
+  const mine = exhibits.find((t) => t.kind !== 'blank');
+  // Без вспомненной вещи остальные проверки белого нигде бессмысленны: сценарий кончается здесь, с понятной причиной.
+  if (!mine) throw new Error('в белом нигде нет вспомненной вещи — дальше карманы не проверить');
+  const replay = await lookUntilDone('thing', mine.id);
+  check('взгляд на вспомненное повторяет его строку, пространство при этом ничего не вызывает', replay.near && replay.flash.on && replay.flash.text === RU[`mem.${first}.done`] && replay.done === false, JSON.stringify(replay));
+  // Контроль: без взгляда на болванку само следующее воспоминание не приходит (пауза 40 с).
+  const ctl = await walkOut();
+  st = await vz(page, () => window.__vz.step(4 * 60));
+  check('без болванки следующее воспоминание не торопится: после выхода его нет', ctl.ok && ctl.s.node === nodeVoid && (await vz(page, () => window.__vz.memory())) === null, JSON.stringify({ node: ctl.s.node, nodeVoid }));
+  // Теперь — взгляд на болванку.
+  await enter('void');
+  st = await state(page);
+  const next = await lookUntilDone('thing', st.pocketInfo.blanks[0]);
+  check('взгляд на болванку без воспоминания: «оно уже идёт»', next.near && next.done === true && next.flash.on && next.flash.text === RU['pocket.void.next'], JSON.stringify(next));
+  const back = await walkOut();
+  st = await vz(page, () => window.__vz.step(90));
+  const mem2 = await vz(page, () => window.__vz.memory());
+  check('и следующее воспоминание приходит сразу после возврата', back.ok && back.s.where === 'main' && mem2 !== null && mem2.id !== first, JSON.stringify({ mem2, where: back.s.where }));
+  // Болванка при идущем воспоминании — напоминание.
+  await enter('void');
+  st = await state(page);
+  const remind = await lookUntilDone('thing', st.pocketInfo.blanks[0]);
+  check('болванка при идущем воспоминании напоминает, что ищешь', remind.near && remind.done === true && remind.flash.on && remind.flash.text === RU[`mem.${mem2?.id}.flash`], JSON.stringify(remind));
+  await leave();
+
+  // ── Счёт времени: пространство редеет, строка внизу меняется ──
+  await enter('void');
+  st = await state(page);
+  // Белое нигде появляется лицом к экспонатам: отвернуться, иначе взгляд на болванку сократит срок.
+  await vz(page, ([p]) => window.__vz.teleport(p[0], p[1], p[2], Math.PI, 0), [st.pos]);
+  st = await stepUntil(page, (x) => x.pocketInfo && x.pocketInfo.age >= x.pocketInfo.stay * 0.5 - 4, 60, 80);
+  const half = { fade: st.pocketInfo?.fade, hint: await hintText(), age: st.pocketInfo?.age, stay: st.pocketInfo?.stay };
+  check('в первой половине срока пространство не редеет: fade 1, внизу «красный проём ведёт назад»', st.where === 'pocket' && half.fade === 1 && half.hint === RU['pocket.hint.exit'], JSON.stringify(half));
+  st = await stepUntil(page, (x) => !x.pocketInfo || x.pocketInfo.fade < 0.3, 20, 120);
+  // К этому времени фонарь без дела обычно уже заглох: нижняя строка в светлом пространстве от него не зависит.
+  const end = { light: st.light?.state, jump: st.jump, where: st.where, fade: st.pocketInfo?.fade, hint: await hintText(), age: st.pocketInfo?.age, stay: st.pocketInfo?.stay };
+  check('к концу срока fade падает ниже 0,3, а нижняя строка — «это место редеет»', end.where === 'pocket' && end.fade < 0.3 && end.fade >= 0.2 - 1e-6 && end.hint === RU['pocket.hint.fading'], JSON.stringify(end));
+  if (wantShots) await saveShot(page, 'session_pocket_fading.png');
+  st = await stepUntil(page, (x) => x.where === 'main' && x.jump === null, 20, 60);
+  check('и пространство отпускает само, вернув в убежище', st.where === 'main' && st.pocketInfo === null, JSON.stringify({ where: st.where }));
+  check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0, (await vz(page, () => window.__vz.missingKeys())).join(', '));
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+}
+
+/** Синтетический палец: события указателя на элементе под точкой. */
+const finger = (page, type, id, x, y) =>
+  page.evaluate(
+    ([t, i, px, py]) => {
+      const el = document.elementFromPoint(px, py) ?? document.body;
+      const target = t === 'pointerdown' ? el : document.querySelector('.vz-touch');
+      target.dispatchEvent(new PointerEvent(t, { pointerId: i, clientX: px, clientY: py, bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: i === 1 }));
+    },
+    [type, id, x, y],
+  );
+
+async function scenarioTouch(browser, baseUrl) {
+  section('Телефон: тач-управление, тряска пальцем, портрет и ландшафт');
+  for (const [name, width, height] of [
+    ['ландшафт 915×412', 915, 412],
+    ['портрет 390×844', 390, 844],
+  ]) {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=med&fail=0&lang=ru&level=test', { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    let st = await state(page);
+    check(`${name}: схема управления — тач`, st.touch === true);
+    check(`${name}: стартовый экран зовёт начать`, (await page.textContent('.vz-overlay__prompt')) === RU['ui.start.touch']);
+    await page.tap('.vz-overlay');
+    await sleep(300);
+    st = await state(page);
+    check(`${name}: касание запускает игру`, st.paused === false);
+    await vz(page, () => window.__vz.freeze(true));
+    check(`${name}: кнопки фонаря и паузы видны и достаточно велики`, await page.evaluate(() => [...document.querySelectorAll('.vz-touch__btn')].filter((b) => !b.hidden).every((b) => b.getBoundingClientRect().width >= 44 && b.getBoundingClientRect().height >= 44)));
+    // Свайп от края экрана (Safari «назад») браузеру не отдаётся, касание в середине — его; у кнопки паузы — не трогаем
+    // (слова партнёра 17.11: «Защита от свайпа нужна»; platform/mobile_guard.ts).
+    {
+      const guard = await page.evaluate(() => {
+        const fire = (x, y, sel) => {
+          const target = (sel && document.querySelector(sel)) || document.querySelector('.vz-canvas') || document.body;
+          const t = new Touch({ identifier: 9, target, clientX: x, clientY: y });
+          return !target.dispatchEvent(new TouchEvent('touchstart', { cancelable: true, bubbles: true, touches: [t], changedTouches: [t] }));
+        };
+        const p = document.querySelector('.vz-touch__btn--pause').getBoundingClientRect();
+        return { left: fire(4, innerHeight / 2), mid: fire(innerWidth / 2, innerHeight / 2), right: fire(innerWidth - 4, innerHeight / 2), pause: fire(p.left + 2, p.top + p.height / 2, '.vz-touch__btn--pause') };
+      });
+      check(`${name}: касание у края экрана браузеру не отдаётся (свайп «назад»), в середине и на кнопке паузы — отдаётся`, guard.left && guard.right && !guard.mid && !guard.pause, JSON.stringify(guard));
+    }
+    // Заряд фонаря на телефоне — обводкой вокруг кнопки фонаря; отдельного значка заряда нет.
+    {
+      const c = await page.evaluate(() => ({ ring: document.querySelector('.vz-touch__btn--light')?.style.getPropertyValue('--vz-charge') ?? '', hud: getComputedStyle(document.querySelector('.vz-hud__bat')).display }));
+      const want = String(Math.round(st.light.charge * 100));
+      const half = await vz(page, () => {
+        const was = window.__vz.charge();
+        window.__vz.charge(0.4);
+        window.__vz.step(2);
+        const v = document.querySelector('.vz-touch__btn--light').style.getPropertyValue('--vz-charge');
+        window.__vz.charge(was);
+        window.__vz.step(2);
+        return v;
+      });
+      check(`${name}: заряд фонаря — обводкой вокруг кнопки фонаря, отдельного значка нет`, c.ring === want && half === '40' && c.hud === 'none', JSON.stringify({ ...c, want, half }));
+    }
+
+    // Стик слева: палец вверх — вперёд.
+    const sx = width * 0.2;
+    const sy = height * 0.7;
+    const z0 = st.pos[2];
+    await finger(page, 'pointerdown', 1, sx, sy);
+    await finger(page, 'pointermove', 1, sx, sy - 40);
+    st = await vz(page, () => window.__vz.tick(60));
+    check(`${name}: стик слева ведёт вперёд`, z0 - st.pos[2] > 1, `пройдено ${(z0 - st.pos[2]).toFixed(2)} м`);
+    check(`${name}: стик виден под пальцем`, await page.evaluate(() => document.querySelector('.vz-touch__stick').classList.contains('is-on')));
+    // Второй палец справа ведёт луч, не мешая ходьбе.
+    const yaw0 = st.aim[0];
+    await finger(page, 'pointerdown', 2, width * 0.7, height * 0.4);
+    await finger(page, 'pointermove', 2, width * 0.7 + 60, height * 0.4);
+    st = await vz(page, () => window.__vz.tick(2));
+    check(`${name}: палец справа поворачивает луч вправо`, st.aim[0] < yaw0 - 0.2, `Δyaw = ${(st.aim[0] - yaw0).toFixed(3)}`);
+    await finger(page, 'pointerup', 2, width * 0.7 + 60, height * 0.4);
+    await finger(page, 'pointerup', 1, sx, sy - 40);
+    st = await vz(page, () => window.__vz.tick(40));
+    check(`${name}: палец убран — игрок останавливается`, Math.hypot(st.vel[0], st.vel[2]) < 0.1);
+
+    // Тап по экрану — шаг вперёд: игрок идёт около секунды и останавливается сам.
+    const tapAt = [width * 0.7, height * 0.5];
+    let from = st.pos;
+    const yawTap = st.aim[0];
+    await finger(page, 'pointerdown', 5, tapAt[0], tapAt[1]);
+    await finger(page, 'pointerup', 5, tapAt[0], tapAt[1]);
+    st = await vz(page, () => window.__vz.tick(30));
+    let walked = Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]);
+    check(`${name}: тап по экрану — шаг вперёд, луч на месте`, walked > 0.5 && Math.abs(st.aim[0] - yawTap) < 0.01, `пройдено ${walked.toFixed(2)} м, Δyaw = ${(st.aim[0] - yawTap).toFixed(3)}`);
+    // Шаг длится 0,85 с настоящего времени: ждём, пока он кончится.
+    await sleep(950);
+    st = await vz(page, () => window.__vz.tick(40));
+    check(`${name}: шаг кончился — игрок стоит`, Math.hypot(st.vel[0], st.vel[2]) < 0.1, `скорость ${Math.hypot(st.vel[0], st.vel[2]).toFixed(2)}`);
+
+    // Удержание: палец на месте — идём, пока держим; тем же пальцем можно вести луч.
+    await finger(page, 'pointerdown', 6, tapAt[0], tapAt[1]);
+    await sleep(260);
+    from = (await state(page)).pos;
+    st = await vz(page, () => window.__vz.tick(60));
+    walked = Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]);
+    check(`${name}: палец держат на месте — игрок идёт вперёд, под пальцем кольцо`, walked > 1.5 && (await page.evaluate(() => document.querySelector('.vz-touch__hold').classList.contains('is-on'))), `пройдено ${walked.toFixed(2)} м`);
+    const yawHold = st.aim[0];
+    await finger(page, 'pointermove', 6, tapAt[0] + 50, tapAt[1]);
+    st = await vz(page, () => window.__vz.tick(12));
+    check(`${name}: тем же пальцем ведут луч, не останавливаясь`, st.aim[0] < yawHold - 0.2 && Math.hypot(st.vel[0], st.vel[2]) > 1, `Δyaw = ${(st.aim[0] - yawHold).toFixed(3)}, скорость ${Math.hypot(st.vel[0], st.vel[2]).toFixed(2)}`);
+    await finger(page, 'pointerup', 6, tapAt[0] + 50, tapAt[1]);
+    st = await vz(page, () => window.__vz.tick(40));
+    check(`${name}: палец отпущен — игрок останавливается, кольца нет`, Math.hypot(st.vel[0], st.vel[2]) < 0.1 && !(await page.evaluate(() => document.querySelector('.vz-touch__hold').classList.contains('is-on'))));
+    // Ведение без удержания — только луч: игрок стоит.
+    from = st.pos;
+    await finger(page, 'pointerdown', 7, tapAt[0], tapAt[1]);
+    await finger(page, 'pointermove', 7, tapAt[0] - 50, tapAt[1]);
+    await sleep(260);
+    st = await vz(page, () => window.__vz.tick(30));
+    await finger(page, 'pointerup', 7, tapAt[0] - 50, tapAt[1]);
+    check(`${name}: повёл пальцем сразу — луч повернулся, а игрок стоит`, Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]) < 0.05, `сдвиг ${Math.hypot(st.pos[0] - from[0], st.pos[2] - from[2]).toFixed(2)} м`);
+    st = await vz(page, () => window.__vz.tick(10));
+
+    // Кнопка фонаря (слова партнёра 17.11 08:42, 09:23, 10:04): короткий тап — выключатель (гасит и зажигает); палец
+    // держат — фонарь заряжается, кольцо заряда больше, на полном — вспышка и обычный свет. Смахивания нет.
+    const btn = await page.evaluate(() => {
+      const r = document.querySelector('.vz-touch__btn--light').getBoundingClientRect();
+      return [r.left + r.width / 2, r.top + r.height / 2];
+    });
+    const lightBtn = () =>
+      page.evaluate(() => {
+        const b = document.querySelector('.vz-touch__btn--light');
+        return { held: b.classList.contains('is-held'), charging: b.classList.contains('is-charging'), flash: b.classList.contains('is-flash'), dead: b.classList.contains('is-dead'), scale: new DOMMatrix(getComputedStyle(b, '::before').transform).a };
+      });
+    await finger(page, 'pointerdown', 3, btn[0], btn[1]);
+    await finger(page, 'pointerup', 3, btn[0], btn[1]);
+    st = await vz(page, () => window.__vz.tick(2));
+    check(`${name}: короткий тап по кнопке — фонарь гаснет`, st.light.state === 'off', st.light.state);
+    await finger(page, 'pointerdown', 3, btn[0], btn[1]);
+    await finger(page, 'pointerup', 3, btn[0], btn[1]);
+    st = await vz(page, () => window.__vz.tick(2));
+    check(`${name}: второй тап — фонарь снова горит`, st.light.state === 'on', st.light.state);
+    await finger(page, 'pointerdown', 3, btn[0], btn[1]);
+    await finger(page, 'pointerup', 3, btn[0], btn[1]);
+    st = await vz(page, () => window.__vz.tick(2));
+    // Держать палец: заряд задан пониже, чтобы было видно, как он растёт.
+    await vz(page, () => window.__vz.charge(0.55));
+    await finger(page, 'pointerdown', 8, btn[0], btn[1]);
+    // Кольцо растёт плавно (0,18 с), а кадры программного рендера медленные и неровные: время перехода зависит
+    // от загрузки машины. Замер — без перехода: проверяется само правило «под пальцем кольцо больше».
+    await page.addStyleTag({ content: '.vz-touch__btn--light::before { transition: none !important; }' });
+    // Удержанием палец становится через четверть секунды (раньше это может быть тап).
+    await sleep(320);
+    st = await vz(page, () => window.__vz.tick(30));
+    let ring = await lightBtn();
+    check(`${name}: палец на кнопке — кольцо заряда больше, заряд растёт, а свет ещё не горит`, ring.held && ring.charging && ring.scale > 1.3 && st.light.charge > 0.6 && st.light.state === 'off', JSON.stringify({ ...ring, charge: st.light.charge, state: st.light.state }));
+    for (let i = 0; i < 60 && st.light.state !== 'on'; i++) st = await vz(page, () => window.__vz.tick(3));
+    ring = await lightBtn();
+    // Вспышка мягкая (партнёр 19.11: «вспышки всегда мягкие»): луч не прыгает, а набухает и за секунду спадает — в середине
+    // в 1,6 раза ярче. Ловим её вершину по ходу и то, что она прошла.
+    const flashOn = ring.flash;
+    let peak = st.light.intensity;
+    const startI = st.light.intensity;
+    for (let i = 0; i < 30; i++) {
+      st = await vz(page, () => window.__vz.tick(3));
+      peak = Math.max(peak, st.light.intensity);
+    }
+    check(`${name}: заряд полный — мягкая вспышка (луч плавно набухает ярче обычного и спадает, кнопка светится) и свет`, st.light.state === 'on' && startI < 1.2 && peak > 1.45 && st.light.intensity < 1.1 && flashOn, JSON.stringify({ state: st.light.state, start: startI, peak, end: st.light.intensity, flash: flashOn }));
+    st = await vz(page, () => window.__vz.tick(70));
+    check(`${name}: через секунду — обычный свет`, st.light.state === 'on' && st.light.intensity > 0.5 && st.light.intensity < 1.1, `яркость ${st.light.intensity.toFixed(2)}`);
+    await finger(page, 'pointerup', 8, btn[0], btn[1]);
+    st = await vz(page, () => window.__vz.tick(2));
+    ring = await lightBtn();
+    check(`${name}: палец убран — кольцо прежнего размера, свет горит`, !ring.held && !ring.charging && st.light.state === 'on', JSON.stringify(ring));
+
+    // Отказ: кнопка зовёт держать палец; держат — заряжается и загорается.
+    await vz(page, () => window.__vz.fail());
+    st = await vz(page, () => window.__vz.step(5));
+    ring = await lightBtn();
+    check(`${name}: у заглохшего фонаря кнопка зовёт, подсказка — держать на ней палец`, ring.dead && (await page.textContent('.vz-hud__prompt-text'))?.includes('Держите') === true, JSON.stringify(ring));
+    await finger(page, 'pointerdown', 9, btn[0], btn[1]);
+    await sleep(320);
+    for (let i = 0; i < 80 && st.light.state !== 'on'; i++) st = await vz(page, () => window.__vz.tick(4));
+    await finger(page, 'pointerup', 9, btn[0], btn[1]);
+    check(`${name}: палец на кнопке оживляет заглохший фонарь`, st.light.state === 'on', `состояние ${st.light.state}, заряд ${st.light.charge.toFixed(2)}`);
+
+    const grid = await vz(page, () => window.__vz.probe());
+    check(`${name}: картинка есть`, Math.max(...grid) > 40, `максимум ${Math.max(...grid).toFixed(1)}`);
+    const bad = await page.evaluate(layoutProbe);
+    check(`${name}: надписи и кнопки в пределах экрана`, bad.length === 0, bad.join('; '));
+    if (wantShots) {
+      mkdirSync(OUT, { recursive: true });
+      await saveShot(page, `touch_${width}x${height}.png`);
+    }
+    // Пауза кнопкой.
+    await vz(page, () => window.__vz.freeze(false));
+    await page.tap('.vz-touch__btn--pause');
+    await page.waitForFunction(() => window.__vz.state().overlay === 'paused', null, { timeout: 15000 }).catch(() => undefined);
+    check(`${name}: кнопка паузы работает`, (await state(page)).overlay === 'paused');
+    check(`${name}: нет ошибок в консоли`, log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    await context.close();
+  }
+}
+
+async function scenarioTouchSession(browser, baseUrl) {
+  section('Телефон в сессии: ни кнопки действия, ни списка; вспышка воспоминания и лимбо в кадре');
+  for (const [name, width, height] of [
+    ['ландшафт 915×412', 915, 412],
+    ['портрет 390×844', 390, 844],
+  ]) {
+    const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&rank=1&loop=1', { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    let bad = await page.evaluate(layoutProbe);
+    await page.tap('.vz-overlay__gear');
+    await page.waitForSelector('.vz-settings', { state: 'visible', timeout: 5000 });
+    const listBad = await page.evaluate(layoutProbe);
+    check(`${name}: заставка (с тихим предупреждением о вспышках внизу) и открытый список настроек помещаются на экране`, bad.length === 0 && listBad.length === 0 && (await page.textContent('.vz-overlay__note')) === RU['title.warn'] && (await page.isVisible('.vz-overlay__note')) && (await page.isVisible('.vz-seg--flash')) && (await page.isVisible('.vz-seg--lang')), [...bad, ...listBad].join('; '));
+    if (wantShots) {
+      mkdirSync(OUT, { recursive: true });
+      await saveShot(page, `touch_settings_${width}x${height}.png`);
+    }
+    await page.tap('.vz-overlay__gear');
+    await page.tap('.vz-overlay');
+    await sleep(300);
+    await vz(page, () => window.__vz.freeze(true));
+    await vz(page, () => window.__vz.calm(true));
+    let st = await vz(page, () => window.__vz.step(5));
+    check(`${name}: кнопки действия и списка заданий нет вовсе; фонарь и пауза на месте`, await page.evaluate(() => !document.querySelector('.vz-touch__btn--act') && !document.querySelector('.vz-touch__btn--goals') && !!document.querySelector('.vz-touch__btn--light') && !!document.querySelector('.vz-touch__btn--pause')));
+    check(`${name}: в первые секунды заданий нет`, st.session.memories.every((m) => m.state === 'hidden') && (await page.evaluate(() => !document.querySelector('.vz-hud__goals').classList.contains('is-on'))));
+
+    // Вспышка воспоминания. Она гаснет по часам страницы (5,2 с), а пять кадров после появления вещи без видеокарты могут
+    // идти секунды (сборка шейдеров): поэтому «загорелась» ловится наблюдателем в миг загорания, а не тем, что ещё горит.
+    await page.evaluate(() => {
+      const el = document.querySelector('.vz-hud__flash');
+      window.__flashLit = null;
+      const seen = () => {
+        if (el.classList.contains('is-on') && !window.__flashLit) window.__flashLit = { text: el.textContent, at: performance.now() };
+      };
+      window.__flashObs?.disconnect();
+      window.__flashObs = new MutationObserver(seen);
+      window.__flashObs.observe(el, { attributes: true, attributeFilter: ['class'], childList: true, characterData: true, subtree: true });
+    });
+    const shownAt = await page.evaluate(() => performance.now());
+    await vz(page, () => window.__vz.reveal());
+    st = await vz(page, () => window.__vz.step(5));
+    await sleep(350);
+    const active = st.session.memories.find((m) => m.state === 'active');
+    const flash = await page.evaluate((t0) => {
+      const el = document.querySelector('.vz-hud__flash');
+      const r = el.getBoundingClientRect();
+      window.__flashObs?.disconnect();
+      const lit = window.__flashLit;
+      return { on: el.classList.contains('is-on'), lit: lit?.text ?? null, ms: Math.round(performance.now() - t0), text: el.textContent, left: r.left, right: r.right, top: r.top, bottom: r.bottom, w: innerWidth, h: innerHeight };
+    }, shownAt);
+    const want = active ? memText(RU, active.id, 'flash') : null;
+    check(`${name}: вспышка воспоминания видна, с текстом, и целиком в кадре`, !!active && (flash.on || flash.lit === want) && flash.text === want && flash.left >= 0 && flash.right <= flash.w && flash.top >= 0 && flash.bottom <= flash.h, JSON.stringify(flash));
+    bad = await page.evaluate(layoutProbe);
+    check(`${name}: вспышка, список слева и кнопки не наезжают друг на друга`, bad.length === 0, bad.join('; '));
+    if (wantShots) {
+      mkdirSync(OUT, { recursive: true });
+      await saveShot(page, `touch_session_flash_${width}x${height}.png`);
+    }
+
+    // Сессия проходится на таче так же (через отладочный API): вспомнил — строка зачёркнута.
+    const near = await vz(page, () => window.__vz.gotoMemory());
+    st = await vz(page, () => window.__vz.step(160));
+    check(`${name}: вспомнил — воспоминание закрыто, строка зачёркнута`, near && st.session.done === 1 && (await page.$$eval('.vz-hud__goal.is-done', (els) => els.length)) === 1);
+    bad = await page.evaluate(layoutProbe);
+    check(`${name}: со строкой в списке всё помещается`, bad.length === 0, bad.join('; '));
+
+    // Лимбо.
+    await vz(page, () => window.__vz.finish());
+    st = await stepUntil(page, (s) => s.where === 'limbo', 20, 40);
+    st = await vz(page, () => window.__vz.step(60));
+    // Симуляция заморожена, а вспышка (5,2 с и ещё 1,6 с затухания) и сообщения гаснут по реальному времени: ждём.
+    await sleep(7000);
+    const limbo = await page.evaluate(() => {
+      const el = document.querySelector('.vz-hud__limbo');
+      const r = el.getBoundingClientRect();
+      return { on: el.classList.contains('is-on'), rows: el.children.length, left: r.left, right: r.right, top: r.top, bottom: r.bottom, w: innerWidth, h: innerHeight };
+    });
+    check(`${name}: строки лимбо видны и целиком в кадре`, st.where === 'limbo' && limbo.on && limbo.rows === 3 && limbo.left >= 0 && limbo.right <= limbo.w && limbo.top >= 0 && limbo.bottom <= limbo.h, JSON.stringify(limbo));
+    bad = await page.evaluate(layoutProbe);
+    check(`${name}: в лимбо надписи и кнопки не наезжают друг на друга`, bad.length === 0, bad.join('; '));
+    if (wantShots) await saveShot(page, `touch_session_limbo_${width}x${height}.png`);
+    check(`${name}: нет ошибок в консоли`, log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+    await context.close();
+  }
+}
+
+/** Выход за экран, обрезанный текст и прокрутка страницы. */
+const layoutProbe = () => {
+  const vw = innerWidth;
+  const vh = innerHeight;
+  const bad = [];
+  for (const el of document.querySelectorAll('.vz-root *')) {
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) continue;
+    if (el.tagName === 'CANVAS' || el.classList.contains('vz-touch__stick') || el.classList.contains('vz-touch__knob')) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    const name = el.tagName + '.' + String(el.className).split(' ')[0];
+    // Список настроек прокручивается внутри себя (data-scroll): строка ниже его края — не выход за экран, если сам список
+    // целиком на экране (его проверяет этот же цикл).
+    const scroller = el.parentElement?.closest('[data-scroll]');
+    if (r.left < -1 || r.right > vw + 1) bad.push(`x-out ${name} ${Math.round(r.left)}..${Math.round(r.right)} из ${vw}`);
+    if ((r.top < -1 || r.bottom > vh + 1) && !scroller) bad.push(`y-out ${name} ${Math.round(r.top)}..${Math.round(r.bottom)} из ${vh}`);
+    if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0 && !/auto|scroll|hidden/.test(cs.overflowX) && ['BUTTON', 'SPAN', 'DIV'].includes(el.tagName) && el.children.length === 0) bad.push(`clip-x ${name} ${el.scrollWidth}>${el.clientWidth}`);
+  }
+  // Надписи записи не наезжают друг на друга и на кнопку паузы.
+  const rect = (sel) => {
+    const el = document.querySelector(sel);
+    if (!el || getComputedStyle(el).display === 'none' || el.closest('.is-hidden')) return null;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? r : null;
+  };
+  const overlap = (a, b) => a && b && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+  const tl = rect('.vz-hud__tl');
+  const tr = rect('.vz-hud__clock');
+  const pause = rect('.vz-touch__btn--pause');
+  if (overlap(tl, tr)) bad.push('overlap REC и время');
+  if (overlap(tl, pause) || overlap(tr, pause)) bad.push('overlap надписи и кнопка паузы');
+  if (overlap(rect('.vz-hud__prompt'), rect('.vz-touch__btn--light'))) bad.push('overlap подсказка тряски и кнопка фонаря');
+  if (overlap(rect('.vz-hud__hint.is-on'), rect('.vz-touch__btn--light'))) bad.push('overlap подсказка и кнопка фонаря');
+  const goals = rect('.vz-hud__goals.is-on');
+  const lightBtn = rect('.vz-touch__btn--light');
+  if (overlap(goals, pause)) bad.push('overlap цели и кнопка паузы');
+  if (overlap(goals, tr)) bad.push('overlap цели и время');
+  // Вспышка воспоминания и строки лимбо — посреди кадра: не наезжают на кнопки, надписи записи и список.
+  const flash = rect('.vz-hud__flash.is-on');
+  const limbo = rect('.vz-hud__limbo.is-on');
+  if (overlap(flash, pause) || overlap(flash, lightBtn) || overlap(flash, goals) || overlap(flash, tl) || overlap(flash, tr)) bad.push('overlap вспышка воспоминания и кнопки, список или надписи записи');
+  if (overlap(limbo, pause) || overlap(limbo, lightBtn) || overlap(limbo, tl) || overlap(limbo, tr) || overlap(limbo, flash)) bad.push('overlap лимбо и кнопки или надписи записи');
+  const toast = rect('.vz-hud__toast.is-on');
+  if (overlap(toast, goals)) bad.push('overlap сообщение и цели');
+  const de = document.documentElement;
+  if (de.scrollWidth > de.clientWidth || de.scrollHeight > de.clientHeight) bad.push(`page-scroll ${de.scrollWidth}x${de.scrollHeight} в ${de.clientWidth}x${de.clientHeight}`);
+  return bad.slice(0, 6);
+};
+
+const MATRIX = [
+  ['360x640', 360, 640, 2, true],
+  ['390x844', 390, 844, 3, true],
+  ['915x412', 915, 412, 2.6, true],
+  // Телефон лёжа поуже: настройки в две колонки, у сегмента языка (три названия) меньше всего места (испанский, 21.11).
+  ['640x360', 640, 360, 2, true],
+  ['800x800', 800, 800, 1, false],
+  ['1280x720', 1280, 720, 1, false],
+  ['2560x1440', 2560, 1440, 1, false],
+];
+
+async function scenarioMatrix(browser, baseUrl) {
+  section(`Матрица раскладки: ${MATRIX.map((m) => m[0]).join(', ')} × ${matrixLangs.join(', ')} (псевдолокализация +35 %)`);
+  if (wantShots) mkdirSync(OUT, { recursive: true });
+  for (const lang of matrixLangs) {
+    for (const [name, width, height, dpr, mobile] of MATRIX.filter((m) => !matrixSizes || matrixSizes.includes(m[0]))) {
+      const { page, context, log } = await openPage(browser, baseUrl, `?lang=${lang}&pseudo=1&q=low&fail=0&rank=1&touch=${mobile ? 1 : 0}`, { viewport: { width, height }, deviceScaleFactor: dpr, isMobile: mobile, hasTouch: mobile, locale: lang });
+      const screens = [];
+      const probe = async (screen) => {
+        const bad = await page.evaluate(layoutProbe);
+        screens.push(`${screen}${bad.length ? ': ' + bad.join('; ') : ''}`);
+        if (wantShots) await saveShot(page, `${name}_${lang}_${screen}.png`);
+        return bad.length === 0;
+      };
+      let ok = await probe('start');
+      // Список настроек под шестерёнкой (слова партнёра 19.11) — на каждом размере и языке.
+      await page.click('.vz-overlay__gear');
+      await page.waitForSelector('.vz-settings', { state: 'visible', timeout: 5000 });
+      ok = (await probe('settings')) && ok;
+      // Названия языков не переносятся посреди слова: перенос — не выход за экран, probe его не видит (куратор, 21.11).
+      const langWrap = await page.evaluate(() =>
+        [...document.querySelectorAll('.vz-seg--lang .vz-seg__opt')]
+          .filter((b) => {
+            const r = document.createRange();
+            r.selectNodeContents(b);
+            return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size > 1;
+          })
+          .map((b) => b.textContent),
+      );
+      if (langWrap.length) screens.push(`settings: названия языков в две строки — ${langWrap.join(', ')}`);
+      ok = langWrap.length === 0 && ok;
+      await page.click('.vz-overlay__gear');
+      await page.click('.vz-overlay', { position: { x: 5, y: 5 } });
+      await sleep(250);
+      await vz(page, () => window.__vz.freeze(true));
+      await vz(page, () => window.__vz.calm(true));
+      await vz(page, () => window.__vz.step(20));
+      ok = (await probe('play')) && ok;
+      // Вспышка воспоминания: строка посреди кадра и строка в списке слева.
+      await vz(page, () => window.__vz.reveal());
+      await vz(page, () => window.__vz.step(5));
+      await sleep(350);
+      ok = (await probe('flash')) && ok;
+      await vz(page, () => window.__vz.fail());
+      await vz(page, () => window.__vz.step(10));
+      ok = (await probe('dead')) && ok;
+      await vz(page, () => window.__vz.finish());
+      await stepUntil(page, (s) => s.where === 'limbo', 30, 40);
+      await vz(page, () => window.__vz.step(60));
+      await sleep(7000);
+      ok = (await probe('limbo')) && ok;
+      await vz(page, () => window.__vz.pause(true));
+      await sleep(150);
+      ok = (await probe('paused')) && ok;
+      const sizeOk = await page.evaluate(() => {
+        const c = document.querySelector('canvas').getBoundingClientRect();
+        return Math.abs(c.width - innerWidth) < 1 && Math.abs(c.height - innerHeight) < 1;
+      });
+      check(`${name} ${lang}: заставка, игра, вспышка воспоминания, заглохший фонарь, лимбо, пауза — без выхода за экран; canvas во весь экран`, ok && sizeOk && log.errors.length === 0, screens.filter((s) => s.includes(':')).join(' | ') + (log.errors.length ? ' ошибки: ' + log.errors.join(' | ').slice(0, 200) : ''));
+      await context.close();
+    }
+  }
+}
+
+async function scenarioBridge(browser, baseUrl) {
+  section('Bridge SDK: game_ready, язык и устройство площадки, пауза (только сборка с window.bridge)');
+  const sdk = [];
+  // Журнал вызовов — собственный debug-лог SDK (?debug=1); слушатель ставится до загрузки страницы.
+  let queue = Promise.resolve();
+  const onConsole = (m) => {
+    if (!m.text().includes('PlaygamaBridge')) return;
+    const handles = m.args().slice(3);
+    const text = m.text().replace(/%c/g, '').replace(/background:[^;]*;[^;]*;[^;]*;[^;]*;?/g, '').trim();
+    queue = queue.then(async () => {
+      const vals = await Promise.all(handles.map((a) => a.jsonValue().catch(() => '?'))).catch(() => []);
+      sdk.push({ text, vals });
+    });
+  };
+  // Язык браузера русский. На mock-площадке bridge.platform.language берётся из него — игра должна начать на нём
+  // (обязательный шаг 3 Bridge, пункт 3.4.2); сам по себе язык браузера игра не читает.
+  const { page, context, log } = await openPage(browser, baseUrl, '?debug=1&q=low&fail=0&rank=1', { locale: 'ru-RU' }, onConsole);
+  const hasBridge = await page.evaluate(() => !!window.bridge);
+  if (!hasBridge) {
+    console.log('  (window.bridge нет — раздел пропущен)');
+    await context.close();
+    return;
+  }
+  const messages = (name) => sdk.filter((c) => /\[platform\] sendMessage\(\)$/.test(c.text) && c.vals[0] === name);
+  for (let i = 0; i < 50 && messages('game_ready').length === 0; i++) {
+    await sleep(100);
+    await queue;
+  }
+  await sleep(400);
+  await queue;
+  check('Bridge инициализирован до старта игры', await page.evaluate(() => window.bridge.isInitialized === true));
+  check('игра работает через адаптер playgama', (await state(page)).platform === 'playgama');
+  const gets = sdk.filter((c) => /\[storage\] get\(\)$/.test(c.text));
+  check('хранилище читается одним вызовом, ключ один — профиль', gets.length === 1 && JSON.stringify(gets[0].vals[0]) === JSON.stringify(['profile']), JSON.stringify(gets.map((g) => g.vals[0])));
+  const platformLang = await page.evaluate(() => window.bridge.platform.language);
+  // Языки игры — ru, en, es (испанский с 21.11); любой другой язык площадки — английский.
+  const want = ['ru', 'es'].includes(platformLang) ? platformLang : 'en';
+  const dict = { ru: RU, en: EN, es: ES }[want];
+  check(
+    `язык заставки — язык площадки (bridge.platform.language = ${platformLang} → ${want})`,
+    (await page.textContent('.vz-overlay__title')) === dict['ui.title'] && (await page.textContent('.vz-overlay__prompt')) === dict['ui.start'] && (await page.evaluate(() => document.documentElement.lang)) === want,
+  );
+  check('game_ready отправлен ровно один раз', messages('game_ready').length === 1, `отправлено ${messages('game_ready').length}`);
+  check('до нажатия «начать» level_started не уходит', messages('level_started').length === 0);
+  // Конфиг Bridge лежит рядом с index.html и это JSON-объект (обязательный шаг 1).
+  const config = await page.evaluate(async () => {
+    const r = await fetch('./playgama-bridge-config.json');
+    const j = r.ok ? await r.json() : null;
+    return { ok: r.ok, object: !!j && typeof j === 'object' && !Array.isArray(j) };
+  });
+  check('playgama-bridge-config.json рядом с index.html, JSON-объект', config.ok && config.object, JSON.stringify(config));
+  // Порядок загрузки (обязательный шаг 2): SDK — первым скриптом, код игры — только после того, как Bridge прочёл свой конфиг.
+  const order = await page.evaluate(() => {
+    const res = performance.getEntriesByType('resource');
+    const find = (re) => res.find((e) => re.test(new URL(e.name).pathname));
+    const sdk = find(/\/playgama-bridge\.js$/);
+    const cfg = find(/\/playgama-bridge-config\.json$/);
+    const game = find(/\/assets\/index-[^/]+\.js$/);
+    const first = document.head.querySelector('script');
+    return { sdkFirst: !!first && /playgama-bridge\.js$/.test(first.getAttribute('src') ?? ''), sdk: sdk?.startTime ?? -1, cfgEnd: cfg?.responseEnd ?? -1, game: game?.startTime ?? -1 };
+  });
+  check('SDK — первый скрипт в <head>; код игры запрошен после SDK и его конфига', order.sdkFirst && order.sdk >= 0 && order.cfgEnd > 0 && order.game >= order.cfgEnd, JSON.stringify(order));
+  await page.click('.vz-overlay');
+  await sleep(600);
+  await queue;
+  const started = messages('level_started')[0]?.vals[1] ?? {};
+  check('level_started при старте: world — место, level — номер сессии', messages('level_started').length === 1 && ['shelter', 'office', 'yellow', 'station'].includes(started.world) && started.level === '1', JSON.stringify(messages('level_started').map((m) => m.vals[1])));
+  // События аналитики игры — из того же журнала SDK: [analytics] send() с именем и данными.
+  const sent = sdk.filter((c) => /\[analytics\] send\(\)$/.test(c.text)).map((c) => [c.vals[0], c.vals[1] ?? null]);
+  const sentNames = sent.map((s) => s[0]);
+  const prog = sent.find((s) => s[0] === 'progression_started')?.[1];
+  check('аналитика: first_input и progression_started (место, номер, ступень, круг)', sentNames.includes('first_input') && !!prog && prog.step_id === started.world && prog.step_index === 1 && Number.isInteger(prog.stage) && prog.lap >= 1, JSON.stringify(sent).slice(0, 300));
+  const lifecycle = sdk.filter((c) => /\[platform\] sendMessage\(\)$/.test(c.text)).map((c) => [c.vals[0], c.vals[1] ?? null]);
+  check(
+    'в событиях и lifecycle-сообщениях нет сида и текста: значения — числа, флаги и короткие слова',
+    sent.length > 0 && [...sent, ...lifecycle].every(([e, d]) => /^[a-z_]+$/.test(e) && Object.entries(d ?? {}).every(([k, v]) => !/seed/.test(k) && (typeof v !== 'string' || /^[a-z0-9_.+-]{1,40}$/.test(v)))),
+    JSON.stringify([...sent, ...lifecycle]).slice(0, 300),
+  );
+  const firstGet = sdk.findIndex((c) => /\[storage\] get\(\)$/.test(c.text));
+  const sets = sdk.slice(firstGet + 1).filter((c) => /\[storage\] set\(\)$/.test(c.text));
+  check('запись хранилища пакетная: только профиль, и только по событию', sets.length >= 1 && sets.length <= 2 && sets.every((c) => JSON.stringify(c.vals[0]) === JSON.stringify(['profile'])), `записей ${sets.length}: ${JSON.stringify(sets.map((c) => c.vals[0]))}`);
+  check('localStorage напрямую не используется (ключи vylazka:*)', !(await page.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith('vylazka:')))));
+  // Пауза приходит из SDK при уходе вкладки в фон.
+  const hide = (hidden) =>
+    page.evaluate((h) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (h ? 'hidden' : 'visible') });
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => h });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, hidden);
+  await hide(true);
+  await sleep(400);
+  let st = await state(page);
+  check('уход вкладки в фон ставит игру на паузу', st.paused === true && st.overlay === 'paused', JSON.stringify(st.pauseReasons));
+  await hide(false);
+  await sleep(400);
+  st = await state(page);
+  check('после возврата игра ждёт нажатия (мышь без жеста не захватить)', st.paused === true && !st.pauseReasons.includes('platform') && !st.pauseReasons.includes('hidden'), JSON.stringify(st.pauseReasons));
+  await page.click('.vz-overlay');
+  await sleep(300);
+  check('нажатие возвращает в игру', (await state(page)).paused === false);
+  await sleep(300);
+  await queue;
+  check('пауза сессии — площадке: level_paused и level_resumed по разу', messages('level_paused').length === 1 && messages('level_resumed').length === 1, `paused ${messages('level_paused').length}, resumed ${messages('level_resumed').length}`);
+  check('game_ready так и остался один', messages('game_ready').length === 1);
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+  check('нет внешних запросов', log.external.length === 0, log.external.join(', ').slice(0, 300));
+  await context.close();
+}
+
+/** Короткий тихий WAV: тестовая замена любому звуковому файлу (настоящие клипы смоуку не нужны). */
+function tinyWav(seconds = 0.25, rate = 8000) {
+  const n = Math.floor(seconds * rate);
+  const buf = Buffer.alloc(44 + n * 2);
+  buf.write('RIFF', 0);
+  buf.writeUInt32LE(36 + n * 2, 4);
+  buf.write('WAVEfmt ', 8);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20);
+  buf.writeUInt16LE(1, 22);
+  buf.writeUInt32LE(rate, 24);
+  buf.writeUInt32LE(rate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
+  buf.write('data', 36);
+  buf.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) buf.writeInt16LE(Math.round(Math.sin(i * 0.35) * 900), 44 + i * 2);
+  return buf;
+}
+
+async function scenarioAudio(browser, baseUrl) {
+  section('Звук: разблокировка жестом, загрузка набора, события и петли, пауза, выключатель');
+  const wav = tinyWav();
+  const asked = [];
+  const prepare = (context) =>
+    context.route('**/snd/*.mp3', (route) => {
+      asked.push(new URL(route.request().url()).pathname.split('/').pop());
+      return route.fulfill({ status: 200, contentType: 'audio/wav', body: wav });
+    });
+  // Первая половина сценария проверяет настоящую мышь (ложное движение после захвата, тряска) — захват настоящий.
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113&audio=snd', {}, null, prepare, true);
+  const aim0 = (await state(page)).aim;
+  // Набор грузится в фоне сразу после первого кадра, но звучать до нажатия браузер не даст.
+  await page.waitForFunction(() => window.__vz.audio().loaded === window.__vz.audio().total, null, { timeout: 30000 }).catch(() => undefined);
+  let au = await vz(page, () => window.__vz.audio());
+  check('до первого нажатия звук заперт, а набор уже загружен целиком', au.state === 'locked' && au.known === au.total && au.total >= 50 && au.loaded === au.total && au.missing === 0, JSON.stringify({ state: au.state, known: au.known, total: au.total, loaded: au.loaded, missing: au.missing }));
+  // Порядок — loadFirst('shelter') (17.11, «звук не срабатывает сразу»): нажатие «старт», гул своего места, люк.
+  check('каждый файл запрошен один раз, первыми — нужные в начале вылазки: старт, гул убежища, люк', asked.length === au.total && new Set(asked).size === au.total && asked.slice(0, 3).join() === 'ui_start_1.mp3,amb_bunker_1.mp3,hatch_1.mp3', `${asked.length} запросов, первые: ${asked.slice(0, 3).join(', ')}`);
+  check('на заставке в списке настроек есть звук (включён)', (await segOn(page, 'sound')) === 'вкл');
+
+  await page.click('.vz-overlay');
+  await sleep(300);
+  au = await vz(page, () => window.__vz.audio());
+  check('нажатие «начать» будит звук: старт записи и люк звучат сразу', au.state === 'running' && (au.played.ui_start ?? 0) === 1 && (au.played.hatch ?? 0) === 1, JSON.stringify({ state: au.state, start: au.played.ui_start, hatch: au.played.hatch }));
+  await vz(page, () => window.__vz.calm(true));
+  await sleep(400);
+  au = await vz(page, () => window.__vz.audio());
+  check('в вылазке идут гул убежища и дыхание, музыки нет', au.loops.includes('amb_bunker') && au.loops.includes('breath_calm') && !au.loops.includes('music_menu'), au.loops.join(', '));
+
+  // Взгляд не должен поворачиваться сам: мышь после старта никто не трогал. (Сразу после захвата
+  // мыши браузер может прислать ложное «движение» — игра обязана его пропустить.)
+  await vz(page, () => window.__vz.freeze(true));
+  const before = await state(page);
+  const locked = await page.evaluate(() => document.pointerLockElement !== null);
+  check('взгляд после старта не дёрнулся сам по себе', Math.abs(before.aim[0] - aim0[0]) < 0.02 && Math.abs(before.aim[1] - aim0[1]) < 0.02, `был ${aim0.map((v) => v.toFixed(3)).join(', ')}, стал ${before.aim.map((v) => v.toFixed(3)).join(', ')}; мышь захвачена: ${locked}`);
+
+  // Шаги: идём отсчитанными шагами симуляции с явным вводом (частота кадров в тестовом браузере
+  // непредсказуема, клавиатуру проверяет другой сценарий) и строго вперёд от люка — взгляд выставлен
+  // заново. После каждой порции дожидаемся двух настоящих кадров: шаг озвучивается в кадре.
+  await vz(page, ([p, a]) => window.__vz.teleport(p[0], p[1], p[2], a[0], a[1]), [before.pos, aim0]);
+  let walked = before;
+  for (let i = 0; i < 8; i++) {
+    walked = await vz(page, () => window.__vz.step(24, { moveZ: 1 }));
+    await vz(page, () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true)))));
+  }
+  au = await vz(page, () => window.__vz.audio());
+  check(
+    'шаги по бетону звучат на ходу',
+    (au.played.step_concrete ?? 0) >= 2,
+    `сыграно ${au.played.step_concrete ?? 0}, просили ${au.asked.step_concrete ?? 0}, пройдено ${Math.hypot(walked.pos[0] - before.pos[0], walked.pos[2] - before.pos[2]).toFixed(2)} м от ${before.pos.map((v) => v.toFixed(2)).join(', ')} до ${walked.pos.map((v) => v.toFixed(2)).join(', ')}, звук ${au.state}, пауза: ${JSON.stringify(walked.pauseReasons)}`,
+  );
+
+  // Фонарь: щелчок выключателя, отказ, дребезг при тряске, оживление.
+  await vz(page, () => window.__vz.freeze(true));
+  const clicks = au.played.flash_click ?? 0;
+  await vz(page, () => window.__vz.step(2, { light: true }));
+  await vz(page, () => window.__vz.step(2, { light: true }));
+  au = await vz(page, () => window.__vz.audio());
+  check('выключатель фонаря щёлкает', (au.played.flash_click ?? 0) >= clicks + 2, `${clicks} → ${au.played.flash_click ?? 0}`);
+  await vz(page, () => window.__vz.fail());
+  await vz(page, () => window.__vz.step(2));
+  let st = await state(page);
+  // Настоящая тряска мышью: звук дребезга идёт от рывков, которые видит детектор.
+  await page.mouse.move(640, 360);
+  await page.mouse.down();
+  for (let i = 0; i < 44 && st.light.state === 'dead'; i++) {
+    await page.mouse.move(640 + (i % 2 === 0 ? 90 : -90), 360, { steps: 3 });
+    st = await vz(page, () => window.__vz.tick(5));
+    await sleep(140);
+  }
+  await page.mouse.up();
+  au = await vz(page, () => window.__vz.audio());
+  check('фонарь глохнет со звуком, при тряске гремят батарейки, потом щелчок', st.light.state === 'on' && (au.played.flash_die ?? 0) === 1 && (au.played.flash_rattle ?? 0) >= 2 && (au.played.flash_click ?? 0) >= clicks + 3, JSON.stringify({ die: au.played.flash_die, rattle: au.played.flash_rattle, click: au.played.flash_click, light: st.light.state }));
+
+  // Пауза и возврат.
+  await vz(page, () => window.__vz.freeze(false));
+  await vz(page, () => window.__vz.pause(true));
+  await sleep(250);
+  au = await vz(page, () => window.__vz.audio());
+  check('на паузе звук остановлен целиком', au.state === 'suspended', au.state);
+  await openSettings(page);
+  check('на экране паузы тоже есть звук (в списке под шестерёнкой)', (await page.isVisible('.vz-seg--sound')) === true);
+  await segPick(page, 'sound', 'off');
+  au = await vz(page, () => window.__vz.audio());
+  st = await state(page);
+  check('переключатель звука выключает звук и не снимает паузу', au.muted === true && st.paused === true && (await segOn(page, 'sound')) === 'выкл');
+  await closeSettings(page);
+  await page.click('.vz-overlay');
+  await sleep(300);
+  au = await vz(page, () => window.__vz.audio());
+  check('после паузы звук снова идёт (но выключен игроком)', au.state === 'running' && au.muted === true, au.state);
+  await page.keyboard.press('KeyM');
+  au = await vz(page, () => window.__vz.audio());
+  check('клавиша M включает звук обратно', au.muted === false);
+  await page.keyboard.press('KeyM');
+  await sleep(200);
+
+  // Выбор запоминается. Мышь дальше не проверяется, а сессия впереди длинная: после перезагрузки
+  // страница получает заглушку захвата (см. FAKE_LOCK).
+  await context.addInitScript(FAKE_LOCK);
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
+  au = await vz(page, () => window.__vz.audio());
+  check('после перезагрузки звук остаётся выключенным', au.muted === true && (await segOn(page, 'sound')) === 'выкл');
+  await segPick(page, 'sound', 'on');
+  await sleep(600);
+  au = await vz(page, () => window.__vz.audio());
+  st = await state(page);
+  check('на карточке задания играет музыка меню, вылазка не началась', st.overlay === 'start' && au.muted === false && au.state === 'running' && au.loops.includes('music_menu'), JSON.stringify({ overlay: st.overlay, state: au.state, loops: au.loops }));
+
+  // Сессия: вспышка воспоминания, «вспомнил», скачок, лимбо, начало следующей сессии.
+  await closeSettings(page);
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  const sorties0 = (await vz(page, () => window.__vz.step(5))).profile.sorties;
+  au = await vz(page, () => window.__vz.audio());
+  const at0 = { hold: au.played.camera_hold ?? 0, beep: au.played.camera_beep ?? 0, spark: au.played.flash_spark ?? 0, hatch: au.played.hatch ?? 0, report: au.played.ui_report ?? 0 };
+  check('в начале сессии люк уже прозвучал один раз, до вспышки камера молчит', at0.hatch === 1 && at0.hold === 0 && at0.beep === 0, JSON.stringify(at0));
+  await vz(page, () => window.__vz.reveal());
+  await vz(page, () => window.__vz.step(5));
+  au = await vz(page, () => window.__vz.audio());
+  check('вспышка воспоминания звучит: камера наводится', (au.played.camera_hold ?? 0) === at0.hold + 1, `${at0.hold} → ${au.played.camera_hold ?? 0}`);
+  await vz(page, () => window.__vz.gotoMemory());
+  st = await vz(page, () => window.__vz.step(150));
+  au = await vz(page, () => window.__vz.audio());
+  check('«вспомнил» — писк камеры один раз', st.session.done === 1 && (au.played.camera_beep ?? 0) === at0.beep + 1, JSON.stringify({ done: st.session.done, beep: au.played.camera_beep }));
+  const spark1 = au.played.flash_spark ?? 0;
+  await vz(page, () => window.__vz.jump('void', 'cut'));
+  st = await stepUntil(page, (s) => s.where === 'pocket', 10, 30);
+  au = await vz(page, () => window.__vz.audio());
+  const spark2 = au.played.flash_spark ?? 0;
+  check('скачок звучит: искра в момент смены места', st.where === 'pocket' && spark2 === spark1 + 1, `${spark1} → ${spark2}`);
+  await stepUntil(page, (s) => s.jump === null, 20, 30);
+  // «Стихают» — по громкости, которой игра хочет от петли (audible), а не по её узлам: затихшая петля отпускается по часам
+  // звука, а они на CI под программной отрисовкой стояли — в web-plain 9a1a6da гул «звучал» в кармане и в лимбо, в Playgama
+  // тот же код прошёл. Состояние AudioContext — в сообщении.
+  const ears = (a) => `слышно: ${a.audible.join(', ') || '—'}; узлы: ${a.loops.join(', ')}; ${a.state}`;
+  au = await audioUntil(page, (a) => !a.audible.includes('amb_bunker') && !a.audible.includes('breath_calm'));
+  check('вне убежища его гул и дыхание стихают', !au.audible.includes('amb_bunker') && !au.audible.includes('breath_calm'), ears(au));
+  await vz(page, () => window.__vz.jump('elsewhere', 'cut'));
+  await stepUntil(page, (s) => s.where === 'main' && s.jump === null, 20, 30);
+  au = await audioUntil(page, (a) => a.audible.includes('amb_bunker'));
+  check('вернулись в убежище — гул вернулся', au.audible.includes('amb_bunker'), JSON.stringify({ ears: ears(au), where: (await state(page)).where, paused: (await state(page)).paused }));
+
+  await vz(page, () => window.__vz.finish());
+  st = await stepUntil(page, (s) => s.where === 'limbo', 20, 40);
+  st = await vz(page, () => window.__vz.step(120));
+  au = await audioUntil(page, (a) => !a.audible.includes('amb_bunker'));
+  check('лимбо: звучит сообщение системы, гул убежища стих, музыки меню нет', st.where === 'limbo' && (au.played.ui_report ?? 0) === at0.report + 1 && !au.audible.includes('amb_bunker') && !au.audible.includes('music_menu'), JSON.stringify({ where: st.where, report: au.played.ui_report, ears: ears(au) }));
+  for (let i = 0; i < 50 && st.profile.sorties <= sorties0; i++) {
+    st = await vz(page, () => window.__vz.step(60));
+    await sleep(150);
+  }
+  st = await vz(page, () => window.__vz.step(30));
+  au = await audioUntil(page, (a) => a.audible.includes('amb_bunker'));
+  check('началась следующая сессия: люк звучит снова, гул убежища вернулся', st.where === 'main' && st.profile.sorties === sorties0 + 1 && (au.played.hatch ?? 0) === at0.hatch + 1 && au.audible.includes('amb_bunker'), JSON.stringify({ where: st.where, hatch: au.played.hatch, ears: ears(au) }));
+
+  check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0);
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  check('нет неудачных запросов', log.failed.length === 0, log.failed.join(' | ').slice(0, 300));
+  await context.close();
+
+  // Сборка без звуковых файлов: игра молчит и ничего не запрашивает.
+  const bare = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113');
+  await bare.page.click('.vz-overlay');
+  await sleep(500);
+  au = await vz(bare.page, () => window.__vz.audio());
+  const real = au.known > 0;
+  check(real ? 'в сборке лежит полный набор звуков' : 'без файлов игра молчит и не запрашивает несуществующее', real ? au.known === au.total : au.loaded === 0 && au.missing === 0 && bare.log.failed.length === 0, JSON.stringify({ known: au.known, loaded: au.loaded, failed: bare.log.failed.length }));
+  check('нет ошибок в консоли', bare.log.errors.length === 0, bare.log.errors.join(' | ').slice(0, 300));
+  await bare.context.close();
+}
+
+/**
+ * Сюжет «Невостребованное» (docs/vylazka/koma): вертикальный срез канона v3 в настоящей сборке. Первый сон — бирка на первой
+ * вещи и разговор со Смотрителем; после третьей вещи место замирает (стерильность: кадр светлее и ровнее); в лимбо отвёл взгляд
+ * от экспоната, пока дописывают владельца, — «не подтверждено»; старая запись с Ритой; после перезагрузки сюжет на месте.
+ * Реплики идут по настоящему времени, поэтому сценарий ждёт их в самой странице.
+ */
+async function scenarioKoma(browser, baseUrl) {
+  section('Сюжет «Невостребованное»: бирка, разговор, замершая комната, «не подтверждено» взглядом, запись');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  await vz(page, () => window.__vz.step(30));
+  const tag = () =>
+    page.evaluate(() => {
+      const e = document.querySelector('.vz-hud__tag');
+      const q = (c) => e.querySelector(c).textContent;
+      return { on: e.classList.contains('is-on'), big: e.classList.contains('is-big'), head: q('.vz-hud__tag-head'), name: q('.vz-hud__tag-name'), key: q('.vz-hud__tag-key'), value: q('.vz-hud__tag-val'), stamp: q('.vz-hud__tag-stamp') };
+    });
+  /** Дождаться реплики (по настоящему времени); false — не дождались. */
+  const heard = (key, ms = 45000) =>
+    page
+      .waitForFunction((w) => { const e = document.querySelector('.vz-hud__say'); return e.classList.contains('is-on') && e.textContent === w; }, RU[key], { timeout: ms, polling: 100 })
+      .then(() => true)
+      .catch(() => false);
+  const recall = async () => {
+    await vz(page, () => { window.__vz.reveal(); window.__vz.step(5); });
+    await vz(page, () => window.__vz.gotoMemory());
+    return vz(page, () => window.__vz.step(170));
+  };
+
+  // Вещь первая: приёмка.
+  let st = await recall();
+  let tg = await tag();
+  check('первая вещь вспомнена — на неё заведена бирка: «найдено», имя, «владелец: —»', st.session.done === 1 && tg.on && !tg.big && tg.head === RU['koma.tag.found'] && tg.name === RU['mem.sh_alarm.task'] && tg.key === RU['koma.tag.owner'] && tg.value === '—', JSON.stringify({ done: st.session.done, tg }));
+  check('чужой голос, потом Смотритель: «подожди. сначала запишем.»', (await heard('koma.a0_e01.echo_01', 8000)) && (await heard('koma.a0_e02.caretaker_01', 12000)));
+  check('он не обещает выхода и вписывает «уточнить»; «так можно?» — «временно.»', (await heard('koma.a0_e03.caretaker_01')) && (await tag()).value === RU['koma.tag.clarify'], JSON.stringify(await tag()));
+  let koma = await vz(page, () => window.__vz.koma());
+  check('пролог записан: вещь найдена, флаги приёмки стоят', koma.flags.includes('STORY_FIRST_ITEM') && koma.flags.includes('STORY_INVENTORY_INTRO') && koma.artifacts.LP05?.phase === 'association', JSON.stringify(koma));
+
+  // Вещь вторая кажется своей; третья спорит с ней — и место замирает.
+  await recall();
+  check('вторая вещь кажется своей: «руки маленькие. кажется, мои.»', await heard('koma.a1_e01.player_01', 15000));
+  await vz(page, () => { window.__vz.reveal(); window.__vz.step(5); });
+  await vz(page, () => window.__vz.gotoMemory());
+  await vz(page, () => window.__vz.step(20));
+  const before = frameMean(await vz(page, () => window.__vz.probe()));
+  st = await vz(page, () => window.__vz.step(170));
+  check('третья вещь говорит о второй другим голосом; Смотритель: «можно выбрать более ясную.»', st.session.done === 3 && (await heard('koma.a1_e01.echo_02', 8000)) && (await heard('koma.a1_e01.caretaker_01', 12000)));
+  check('«не сходится.» — «пока нет.»', await heard('koma.a1_e02.caretaker_01'));
+  st = await vz(page, () => window.__vz.step(240));
+  const after = frameMean(await vz(page, () => window.__vz.probe()));
+  check('место, где всё записано, замерло: оно ещё стоит, собрано целиком и освещено ровно — кадр заметно светлее', st.where === 'main' && st.sterile > 0.9 && after > before + 6, `стерильность ${st.sterile?.toFixed(2)}, где ${st.where}, яркость ${before.toFixed(1)} → ${after.toFixed(1)}`);
+  check('«здесь было больше людей.» — «теперь всё на месте.»', await heard('koma.a1_e03.caretaker_01'));
+
+  // Лимбо: бирка взглядом.
+  st = await stepUntil(page, (s) => s.where === 'limbo', 30, 130);
+  st = await vz(page, () => window.__vz.step(100));
+  koma = await vz(page, () => window.__vz.koma());
+  check('сон кончился лимбо; первое противоречие записано, у сюжета здесь есть дело', st.where === 'limbo' && koma.flags.includes('STORY_FIRST_CONTRADICTION') && st.meta.wanted === true, JSON.stringify({ where: st.where, flags: koma.flags, meta: st.meta }));
+  const kettle = (await vz(page, () => window.__vz.things())).find((t) => t.kind === 'kettle');
+  const reached = kettle ? await vz(page, (id) => window.__vz.gotoThing(id, 2.4), kettle.id) : false;
+  st = await vz(page, () => window.__vz.step(130));
+  tg = await tag();
+  check('посмотрел на экспонат — бирка во весь кадр, лимбо ждёт; Смотритель: «смотри сюда. я допишу.»', reached && st.limboLook === 'kettle' && st.meta.hold === true && tg.on && tg.big && tg.name === RU['mem.sh_kettle.task'] && (await heard('koma.limbo.caretaker_write', 8000)), JSON.stringify({ reached, look: st.limboLook, meta: st.meta, tg }));
+  // Пока смотрят — он пишет.
+  await page.waitForFunction(() => document.querySelector('.vz-hud__tag-val').textContent.length >= 4, null, { timeout: 60000 }).catch(() => undefined);
+  const part = (await tag()).value;
+  check('пока на вещь смотрят, он дописывает владельца по букве', part.length >= 4 && RU['koma.owner.lp01'].startsWith(part), part);
+  // Отвёл взгляд.
+  await vz(page, () => { window.__vz.look(Math.PI, 0); window.__vz.step(6); });
+  await page.waitForFunction(() => document.querySelector('.vz-hud__tag').classList.contains('is-stamped'), null, { timeout: 60000 }).catch(() => undefined);
+  tg = await tag();
+  koma = await vz(page, () => window.__vz.koma());
+  check('отвёл взгляд — запись оборвана, штамп «не подтверждено»; это записано как полноценное действие', tg.stamp === RU['koma.tag.unconfirmed'] && tg.value.endsWith('…') && tg.value.length < RU['koma.owner.lp01'].length && koma.artifacts.LP01?.phase === 'uncertain' && koma.flags.includes('STORY_UNCERTAIN_EVIDENCE_UNLOCKED'), JSON.stringify({ tg, art: koma.artifacts.LP01, flags: koma.flags }));
+  check('«я не знаю, чьё это.» — «…оставим до выяснения.»', await heard('koma.limbo.caretaker_later', 15000));
+  // Старая запись.
+  const tape = await page
+    .waitForFunction(() => { const c = document.querySelector('.vz-hud__meta.is-on .vz-meta--tape'); return c ? [...c.querySelectorAll('.vz-meta__tape-line')].map((e) => e.textContent) : false; }, null, { timeout: 20000, polling: 100 })
+    .then((h) => h.jsonValue())
+    .catch(() => []);
+  const box = await page.evaluate(() => { const c = document.querySelector('.vz-meta--tape'); if (!c) return null; const r = c.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: innerWidth, h: innerHeight }; });
+  check('обрывок старой записи: Рита и он сам, пять строк по канону, карточка в кадре', tape.length === 5 && tape[0] === RU['koma.a2_e02.rita_01'] && tape[4] === RU['koma.a2_e02.rita_03'] && !!box && box.l >= 0 && box.r <= box.w && box.t >= 0 && box.b <= box.h, JSON.stringify({ tape, box }));
+  koma = await vz(page, () => window.__vz.koma());
+  check('Рита записана как знакомая; сестры, стука и обещания «проснёшься» в строках нет', koma.flags.includes('STORY_RITA_INTRODUCED') && !Object.entries(RU).some(([k, v]) => (k.startsWith('koma.') || k === 'intro.goal' || k === 'title.how') && /сестр|стук|просн/i.test(v)));
+
+  // Следующий сон и перезагрузка.
+  // Карточка записи держится до 16 с настоящего времени, и только потом лимбо отпускает.
+  for (let i = 0; i < 160 && st.where !== 'main'; i++) {
+    st = await vz(page, () => window.__vz.step(60));
+    await sleep(150);
+  }
+  check('лимбо отпустило: следующий сон начался', st.where === 'main' && st.profile.sorties === 2, JSON.stringify({ where: st.where, sorties: st.profile.sorties }));
+  await sleep(400);
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 });
+  const kept = await vz(page, () => window.__vz.koma());
+  check('после перезагрузки сюжет на месте: флаги, фазы вещей, сыгранные события', kept.schemaVersion === 3 && kept.flags.includes('STORY_RITA_INTRODUCED') && kept.artifacts.LP01?.phase === 'uncertain' && kept.seenEvents.includes('A2_E02') && kept.currentAct === 'ACT_02', JSON.stringify(kept));
+  // Акты IV–V в настоящей сборке: вещь можно не забирать. Сюжет доводится до узнавания (A4_E03) отладкой — в игре это шесть снов.
+  section('Сюжет: «оставить» — вещь остаётся на месте, ушёл от неё — оставлено');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  await vz(page, () => window.__vz.step(30));
+  koma = await vz(page, () => window.__vz.komaSkip('A4_E03'));
+  st = await recall();
+  tg = await tag();
+  const keptThing = (await vz(page, () => window.__vz.things())).find((t) => t.id === st.kept);
+  check('вспомненная вещь не ушла в пыль: стоит где стояла, на ней бирка с пустым владельцем', koma.flags.includes('STORY_CARETAKER_REFLECTION') && st.session.done >= 1 && st.kept !== null && keptThing?.state === 'idle' && tg.on && tg.value.length < 6 && tg.stamp === '', JSON.stringify({ done: st.session.done, kept: st.kept, thing: keptThing?.state, tg }));
+  // Вступительные реплики («можно не забирать.») проверяет модульный тест: здесь ждать их некогда — запись идёт девять секунд.
+  await page.waitForFunction(() => document.querySelector('.vz-hud__tag-val').textContent.length >= 3, null, { timeout: 60000 }).catch(() => undefined);
+  st = await vz(page, () => window.__vz.step(2));
+  check('пока игрок рядом с вещью, Смотритель пишет владельца', st.keptDist !== null && st.keptDist < 4.5 && (await tag()).value.length >= 3, JSON.stringify({ dist: st.keptDist, tg: await tag() }));
+  // Уйти от вещи: встать в семи метрах от неё (дальше четырёх с половиной — оставлено).
+  await vz(page, (p) => window.__vz.teleport(p[0] + 8, p[1], p[2]), keptThing.pos);
+  st = await vz(page, () => window.__vz.step(4));
+  check('игрок отошёл от вещи дальше четырёх с половиной метров', st.keptDist === null || st.keptDist > 4.5, String(st.keptDist));
+  await page.waitForFunction(() => document.querySelector('.vz-hud__tag-stamp').textContent !== '', null, { timeout: 60000 }).catch(() => undefined);
+  tg = await tag();
+  koma = await vz(page, () => window.__vz.koma());
+  st = await vz(page, () => window.__vz.step(2));
+  const stays = (await vz(page, () => window.__vz.things())).find((t) => t.id === keptThing?.id);
+  check('ушёл от вещи — «оставлено»: вещь записана как оставленная и стоит на месте; владельца у неё нет', tg.stamp === RU['koma.tag.left'] && tg.value === '' && koma.releasedArtifactIds.length === 1 && koma.flags.includes('STORY_RELEASE_1') && koma.flags.includes('STORY_FIRST_UNCLAIMED') && st.kept === null && stays?.state === 'idle', JSON.stringify({ tg, released: koma.releasedArtifactIds, flags: koma.flags.slice(-3), kept: st.kept, thing: stays?.state }));
+  check('«и что написать?» — «ничего.» … «ладно. пока так.»', (await heard('koma.a4_e04.caretaker_01', 12000)) && (await heard('koma.a4_e04.caretaker_03', 20000)));
+  check('нет ненайденных ключей локализации', (await vz(page, () => window.__vz.missingKeys())).length === 0, (await vz(page, () => window.__vz.missingKeys())).join(', '));
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 400));
+  await context.close();
+}
+
+/**
+ * Игра внутри iframe с песочницей без allow-pointer-lock и без allow-same-origin: так её может встроить
+ * портал или просмотрщик файлов. Мышь не захватывается, хранилище недоступно — игра обязана идти.
+ */
+async function scenarioFrame(browser, baseUrl) {
+  section('Песочница iframe: без захвата мыши и без хранилища');
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: 'en-US' });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  const src = new URL('?q=low&fail=0&lang=ru&touch=0&level=test', baseUrl).toString();
+  await page.setContent(`<!doctype html><style>html,body{margin:0;height:100%;background:#000}iframe{border:0;width:100%;height:100%}</style><iframe sandbox="allow-scripts" src="${src}"></iframe>`);
+  const frame = page.frames().find((f) => f !== page.mainFrame());
+  let ready = true;
+  await frame.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 }).catch(() => {
+    ready = false;
+  });
+  check('игра загрузилась в песочнице', ready, errors.join(' | ').slice(0, 300));
+  if (!ready) {
+    await context.close();
+    return;
+  }
+  const fstate = () => frame.evaluate(() => window.__vz.state());
+  await frame.click('.vz-overlay');
+  await sleep(400);
+  await frame.evaluate(() => window.__vz.freeze(true));
+  let st = await frame.evaluate(() => window.__vz.step(1));
+  const locked = await frame.evaluate(() => document.pointerLockElement !== null);
+  check('мышь не захвачена, но игра идёт без паузы', st.paused === false && st.overlay === 'hidden' && locked === false && st.drag === true, JSON.stringify({ paused: st.paused, overlay: st.overlay, locked, drag: st.drag, reasons: st.pauseReasons }));
+  const hint = await frame.textContent('.vz-hud__hint');
+  check('подсказка говорит про зажатую кнопку мыши', hint?.includes('зажатой') === true, hint ?? '');
+
+  // Луч: только с зажатой кнопкой.
+  const aim0 = st.aim[0];
+  await page.mouse.move(640, 360);
+  await page.mouse.down();
+  await page.mouse.move(760, 360, { steps: 6 });
+  await page.mouse.up();
+  st = await frame.evaluate(() => window.__vz.tick(2));
+  const turned = st.aim[0] - aim0;
+  check('с зажатой кнопкой мышь ведёт луч', Math.abs(turned + 0.252) < 0.03, `поворот ${turned.toFixed(3)} рад при движении на 120 px`);
+  await page.mouse.move(520, 360, { steps: 6 });
+  st = await frame.evaluate(() => window.__vz.tick(2));
+  check('без кнопки луч стоит', Math.abs(st.aim[0] - aim0 - turned) < 0.005, `ушёл на ${(st.aim[0] - aim0 - turned).toFixed(3)} рад`);
+
+  // Тряска: подсказка «трясите мышью» работает и без зажатой кнопки.
+  await frame.evaluate(() => window.__vz.fail());
+  await frame.evaluate(() => window.__vz.step(10));
+  for (let i = 0; i < 44; i++) {
+    await page.mouse.move(640 + (i % 2 === 0 ? 90 : -90), 360, { steps: 3 });
+    await frame.evaluate(() => window.__vz.tick(5));
+    if ((await fstate()).light.state === 'on') break;
+  }
+  st = await fstate();
+  check('тряска мышью оживляет фонарь и без зажатой кнопки', st.light.state === 'on', `состояние ${st.light.state}, прогресс ${st.light.revive.toFixed(2)}`);
+
+  // Плакаты в песочнице: у страницы здесь нет своего адреса, и картинка с того же сервера считается
+  // чужой. Если её нарисовать на canvas без разрешения сервера, с него не снять текстуру — пропадут все
+  // надписи. Проверяем, что листы загрузились и атлас читается.
+  await frame.waitForFunction(() => window.__vz.sheets().length >= 10, null, { timeout: 30000 }).catch(() => {});
+  const sandboxSheets = await frame.evaluate(() => ({ ids: window.__vz.sheets(), mask: Math.round(window.__vz.sheetContrast('poster_mask')), plan: Math.round(window.__vz.sheetContrast('scheme')) }));
+  check('в песочнице плакаты загружены и стоят в атласе: canvas не «испачкан», надписи целы', sandboxSheets.ids.length === 10 && sandboxSheets.mask > 25 && sandboxSheets.plan > 25, JSON.stringify(sandboxSheets));
+
+  // Заставка в песочнице: без хранилища и без ?lang игра английская, что бы ни говорил браузер.
+  const page2 = await context.newPage();
+  await page2.setContent(`<!doctype html><style>html,body{margin:0;height:100%;background:#000}iframe{border:0;width:100%;height:100%}</style><iframe sandbox="allow-scripts" src="${new URL('?q=low&fail=0&touch=0&level=test', baseUrl).toString()}"></iframe>`);
+  const frame2 = page2.frames().find((f) => f !== page2.mainFrame());
+  let ready2 = true;
+  await frame2.waitForFunction(() => window.__vz?.ready() === true, null, { timeout: 90000 }).catch(() => {
+    ready2 = false;
+  });
+  if (ready2) await openSettings(frame2);
+  check('в песочнице без ?lang заставка английская, предупреждение о вспышках и настройки на месте', ready2 && (await frame2.textContent('.vz-overlay__title')) === 'DEPRIVATIO' && (await frame2.textContent('.vz-overlay__prompt')) === 'Begin' && (await frame2.evaluate(() => document.documentElement.lang)) === 'en' && (await frame2.textContent('.vz-overlay__note')) === EN['title.warn'] && (await frame2.isVisible('.vz-seg--flash')) && (await frame2.isVisible('.vz-seg--lang')));
+  if (ready2) {
+    // Выбор в песочнице действует до конца страницы, хотя сохранить его некуда.
+    await segPick(frame2, 'lang', 'ru');
+    check('смена языка работает и без хранилища', (await frame2.textContent('.vz-overlay__prompt')) === RU['ui.start'] && (await frame2.evaluate(() => document.documentElement.lang)) === 'ru');
+  }
+
+  // Браузер сам пишет в консоль, что захват мыши в песочнице запрещён, — это не ошибка игры.
+  const own = errors.filter((e) => !/Blocked pointer lock/i.test(e));
+  check('игра не сыплет ошибками без хранилища и захвата мыши', own.length === 0, own.join(' | ').slice(0, 400));
+  await context.close();
+}
+
+/**
+ * Шов офис ↔ жёлтые комнаты (docs/vylazka/pressure.md, §4.1): замер у шва — панели гаснут; пошевелился — жёлтая версия офиса,
+ * там же и так же, без перехода; фонарь погас у шва и зажёгся — снова офис.
+ */
+async function scenarioSeam(browser, baseUrl) {
+  section('Шов: офис ↔ жёлтые комнаты через темноту');
+  const { page, context, log } = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113&rank=2&world=office');
+  await page.click('.vz-overlay');
+  await sleep(300);
+  await vz(page, () => window.__vz.freeze(true));
+  await vz(page, () => window.__vz.calm(true));
+  for (let i = 0; i < 20; i++) await vz(page, () => window.__vz.step(6, { lookYaw: 0.0005 }));
+  const info = await vz(page, () => window.__vz.seam());
+  check('в офисе есть шов; его жёлтая версия собрана заранее, на заставке', !!info && info.seams.length >= 1 && info.ready === true && info.buildMs > 0, JSON.stringify({ seams: info?.seams.length, ready: info?.ready, ms: info?.buildMs }));
+  await vz(page, () => window.__vz.gotoSeam(0, 0.8));
+  await vz(page, () => window.__vz.step(6, { lookYaw: 0.0005 }));
+  // Замер: датчики теряют неподвижного (3,2 + 1 + 0,5 с), ещё секунда темноты у шва.
+  for (let i = 0; i < 70; i++) await vz(page, () => window.__vz.step(6));
+  let st = await state(page);
+  check('замер у шва: панели погасли, вокруг ещё офис', st.world === 'office' && st.ambientLocal < 0.1 && st.seam.here === 0 && st.seam.dark > 1, JSON.stringify({ world: st.world, amb: st.ambientLocal, seam: st.seam }));
+  const before = st;
+  await vz(page, () => window.__vz.step(1, { lookYaw: 0.0005 }));
+  st = await vz(page, () => window.__vz.step(30));
+  const cam = (await page.textContent('.vz-hud__cam'))?.trim();
+  const moved = Math.hypot(st.pos[0] - before.pos[0], st.pos[2] - before.pos[2]);
+  check(
+    'пошевелился — жёлтые комнаты: та же точка и взгляд, фонарь горит, без перехода; камера молча — КАМ-12Б',
+    st.world === 'yellow' && moved < 0.05 && Math.abs(st.aim[0] - before.aim[0]) < 0.01 && st.light.state === 'on' && st.jump === null && st.seam.crossed === 1 && cam === RU['hud.cam.yellow'],
+    JSON.stringify({ world: st.world, moved: +moved.toFixed(3), light: st.light.state, jump: st.jump, cam }),
+  );
+  if (wantShots) await saveShot(page, 'seam_yellow.png');
+  // Обратно: фонарь выключен у шва, постоял, включил.
+  await vz(page, () => window.__vz.toggleLight());
+  for (let i = 0; i < 25; i++) await vz(page, () => window.__vz.step(6));
+  await vz(page, () => window.__vz.toggleLight());
+  st = await vz(page, () => window.__vz.step(6, { lookYaw: 0.0005 }));
+  check('фонарь погас у шва и зажёгся — снова офис, панель над головой горит', st.world === 'office' && st.ambientLocal > 0.9 && st.seam.crossed === 2 && (await page.textContent('.vz-hud__cam'))?.trim() === RU['hud.cam.office'], JSON.stringify({ world: st.world, amb: st.ambientLocal, seam: st.seam }));
+  check('нет ошибок в консоли', log.errors.length === 0, log.errors.join(' | ').slice(0, 300));
+  if (wantShots) await saveShot(page, 'seam_office.png');
+  await context.close();
+
+  // Вещь по ту сторону шва (pressure.md, §4.4; квиз 25.11): здесь — кружевной след, за швом — вещь.
+  const aw = await openPage(browser, baseUrl, '?q=low&fail=0&lang=ru&touch=0&seed=20041113&rank=2&wear=0.14&world=office&away=1');
+  await aw.page.click('.vz-overlay');
+  await sleep(300);
+  await vz(aw.page, () => window.__vz.freeze(true));
+  await vz(aw.page, () => window.__vz.calm(true));
+  await vz(aw.page, () => window.__vz.reveal());
+  await vz(aw.page, () => window.__vz.step(6));
+  const near = await vz(aw.page, () => window.__vz.gotoMemory());
+  let as = await vz(aw.page, () => window.__vz.step(90));
+  // Строка ждёт в очереди, пока догорит название сессии (по часам страницы): ждём её до 10 с.
+  await aw.page.waitForFunction((want) => document.querySelector('.vz-hud__toast')?.textContent?.trim() === want, RU['toast.seam.away'], { timeout: 10000 }).catch(() => {});
+  const toast = (await aw.page.textContent('.vz-hud__toast'))?.trim();
+  check(
+    'вещь по ту сторону шва: здесь от неё след — не вспоминается, игрок слышит строку',
+    near && as.seam.away === true && as.world === 'office' && as.session.memories.every((m) => m.state !== 'done') && toast === RU['toast.seam.away'],
+    JSON.stringify({ near, away: as.seam.away, world: as.world, toast }),
+  );
+  if (wantShots) await saveShot(aw.page, 'seam_away_trace.png');
+  await vz(aw.page, () => window.__vz.crossSeam());
+  await vz(aw.page, () => window.__vz.gotoMemory());
+  as = await vz(aw.page, () => window.__vz.step(150));
+  check('прошёл швом — та же вещь настоящая и вспоминается', as.world === 'yellow' && as.seam.away === false && as.session.memories.some((m) => m.state === 'done'), JSON.stringify({ world: as.world, away: as.seam.away, mem: as.session.memories.map((m) => m.state) }));
+  if (wantShots) await saveShot(aw.page, 'seam_away_thing.png');
+  check('нет ошибок в консоли (вещь за швом)', aw.log.errors.length === 0, aw.log.errors.join(' | ').slice(0, 300));
+  await aw.context.close();
+}
+
+// ───────────────────────────── запуск ─────────────────────────────
+
+const server = await startServer();
+const browser = await launchBrowser();
+// «HeadlessChrome/…» — chromium-headless-shell, «Chrome/…» — полный Chromium: по логу видно, кто гонял тест.
+const product = await browser.newBrowserCDPSession().then((cdp) => cdp.send('Browser.getVersion')).then((v) => v.product).catch(() => browser.version());
+console.log(`Смоук: ${remoteUrl ?? distDir} → ${server.url}; браузер ${product}`);
+/**
+ * Сценарий целиком. Исключение в одном сценарии не обрывает остальные: раньше один провал в карманах
+ * (дальше — обращение к несуществующей вещи) снимал с прогона страх, звук, касания, мост и матрицу, и их
+ * провалы не были видны.
+ */
+const run = async (name, scenario) => {
+  try {
+    await scenario(browser, server.url);
+  } catch (e) {
+    failures.push(`исключение в сценарии ${name}: ${e.message}`);
+    console.error(e);
+  }
+};
+try {
+  if (wants('play')) await run('play', scenarioPlay);
+  if (wants('gen')) await run('gen', scenarioGen);
+  if (wants('worlds')) await run('worlds', scenarioWorlds);
+  if (wants('seam')) await run('seam', scenarioSeam);
+  if (wants('flats')) await run('flats', scenarioFlats);
+  if (wants('illusions')) await run('illusions', scenarioIllusions);
+  if (wants('session')) await run('session', scenarioSession);
+  // Только карманные пространства или только вещи сна (быстрый прогон; в полный session они уже входят).
+  if (only?.includes('pockets')) await run('pockets', scenarioPockets);
+  // Только честный прогон первой вещи (быстро; в полный session он уже входит).
+  if (only?.includes('honest')) await run('honest', scenarioHonest);
+  if (only?.includes('things')) await run('things', scenarioThings);
+  if (wants('stages')) await run('stages', scenarioStages);
+  if (wants('scenes')) await run('scenes', scenarioScenes);
+  if (wants('koma')) await run('koma', scenarioKoma);
+  if (wants('fear')) await run('fear', scenarioFear);
+  if (wants('audio')) await run('audio', scenarioAudio);
+  if (wants('frame')) await run('frame', scenarioFrame);
+  if (wants('touch')) await run('touch', scenarioTouch);
+  if (wants('touch')) await run('touch', scenarioTouchSession);
+  if (wants('bridge')) await run('bridge', scenarioBridge);
+  if (wantMatrix && wants('matrix')) await run('matrix', scenarioMatrix);
+} finally {
+  await browser.close();
+  await server.close();
+}
+console.log(`\nИтог: прошло ${passed}, провалено ${failures.length}`);
+if (failures.length > 0) {
+  for (const f of failures) console.log(`  — ${f}`);
+  process.exit(1);
+}

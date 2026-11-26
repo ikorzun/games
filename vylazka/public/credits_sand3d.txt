@@ -1,0 +1,58 @@
+Untitled Session — 3D models from the Sand3D catalog (Sandflow), CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+Each model below is credited as the catalog gives it. Changes made for the game: the mesh was simplified
+(meshoptimizer), rotated and in a few cases rescaled, and its materials were mapped to the game's own materials.
+
+s3_bunk_black — Bunk bed: "bunk bed" by filthycent, https://sketchfab.com/3d-models/ea60847abaaf4662b5f7c75b44f3ce9d, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_bunk_mattress — Bunk bed: "A109082006" by 109082006, https://sketchfab.com/3d-models/f049870aa95141b881c43111963ab358, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_bed_iron_white — Bed: "Frida Hospital Bed" by queenawzq, https://sketchfab.com/3d-models/0c1ea198d1ae4153a77e99b5bb4a3a47, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_bed_iron_green — Bed: "Rusty Bed" by UrNogness, https://sketchfab.com/3d-models/e162e6533b224d769edb54cf55f7a62b, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_chair_carved — Chair: "Silla" by Dacoher, https://sketchfab.com/3d-models/2712fae0ee5f4b4d8581573bbfac4d3d, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_chair_ladder — Chair: "Wooden Dining Chair" by vikki0612, https://sketchfab.com/3d-models/5e1f7a56da4a4dab8ad64efd46ed9d9f, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_stool_wood — Stool: "Stool - handpainted" by marvelmaster, https://sketchfab.com/3d-models/03e6e0abd1a34fe8906982f5e7e0a160, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_table_kitchen — Table: "White Wooden Kitchen Table" by ryandykesdesigns, https://sketchfab.com/3d-models/f63ff45c124840709310932183c99b1a, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_table_work — Drafting desk: Articraft Data, Matt Zhou et al., record rec_desk_with_drawer_9b15398564334344b74629c6e92edb81, CC BY 4.0; modified: rewritten as a sand3d program
+s3_wardrobe_plain — Cupboard: "cupboard" by AhmetErenUskut, https://sketchfab.com/3d-models/ed090b994a2247398775a49a2d95a6fe, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_wardrobe_grey — Cabinet: "Y7AA00" by Interiors3D, https://sketchfab.com/3d-models/244e006c51f94c63a95d501de5b62360, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_dresser — Five drawer wooden dresser: Articraft Data, Matt Zhou et al., record rec_drawer_cabinet_with_sliding_drawers_dcb143c2511744ba867d83d56a4b39bd, CC BY 4.0; modified: rewritten as a sand3d program
+s3_bookcase_dark — Bookcase: "Cupboard" by Pablo88, https://sketchfab.com/3d-models/36b2775809194d4aa1369e54646f2ce7, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_etagere — Shelving: "Librero Cuenca" by sergiosainz93, https://sketchfab.com/3d-models/467089fb90f44542b2098e78011b24bd, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_sofa_grey — Bench: "Fancy chair" by Only_Grimm, https://sketchfab.com/3d-models/6a892b8b024743479ba1168b92508d76, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_sofa_olive — Sofa: "sofa" by delinx, https://sketchfab.com/3d-models/e94fe18bb73047d999258d1af1c7d247, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_armchair_round — Armchair: "Fauteuil Jaune" by Matthew.Lemaitre, https://sketchfab.com/3d-models/f56d30f5076e4a2a923746e2b9e5eb79, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_armchair_sixties — Armchair: "Sillón Mid Century II" by Pablo.Portela, https://sketchfab.com/3d-models/cec671d5768e4ee98b1c6d86157d3ef1, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_locker_olive — Cabinet: "Locker" by hopefuldesign, https://sketchfab.com/3d-models/90a896d58d8946628a5ec961e5cc9911, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_locker_grey — Utility cabinet: Articraft Data, Matt Zhou et al., record rec_hingeddoor_cabinet_3ea15e426b0b4909b8489120f8c3f814, CC BY 4.0; modified: rewritten as a sand3d program
+s3_rack_metal — Shelving rack: "Metal Shelf" by simsora13, https://sketchfab.com/3d-models/e21ffc6d9ab34e759d8633a176f736f2, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_desk_green — Traditional partners desk: Articraft Data, Matt Zhou et al., record rec_desk_with_drawer_3ac30148e06d4e7aa50d98cc15b266de, CC BY 4.0; modified: rewritten as a sand3d program
+s3_desk_simple — Desk: "Desktop" by george125spartan, https://sketchfab.com/3d-models/754a8ae1682d4e4db541a1c23b9939e6, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_bench_wood — Bench: "Simple Wooden Bench" by Jeremy_W, https://sketchfab.com/3d-models/eb5257dc531847dfbe00c8a1900b6d40, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_nightstand — Nightstand: "Nightstand" by jacosta0531, https://sketchfab.com/3d-models/e3639e4198f1484984d80c1cef6598ed, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_crib — Crib: "Baby crib" by amanduca, https://sketchfab.com/3d-models/d02ba46d170143e58ec7f9e4c7edb09c, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_cabinet_glass — Glass front display cabinet: Articraft Data, Matt Zhou et al., record rec_hingeddoor_cabinet_1f47162db44740bcb4e29cc0e77d445f, CC BY 4.0; modified: rewritten as a sand3d program
+s3_cabinet_medical — Cabinet: NVIDIA SimReady assets: "cabinet_file_b02" by NVIDIA, https://huggingface.co/datasets/nvidia/simready-assets/tree/653d91e182011f357cf1644013cc94ddf194d349/cabinet_file_b02, CC BY 4.0; modified: rewritten as a sand3d program
+s3_desk_office — Study desk right pedestal: Articraft Data, Matt Zhou et al., record rec_desk_with_drawer_3ae3738970474ecea6bba0547892523d, CC BY 4.0; modified: rewritten as a sand3d program
+s3_desk_office_grey — Desk: "верстак" by vychurov, https://sketchfab.com/3d-models/f6852a46d21e47559f6c8a5e73035bed, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_chair_office — Chair: "Office Wheel Chair" by colinmoeller369, https://sketchfab.com/3d-models/03b13857f79d4b75889b16fd6c922a61, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_filing_cabinet — Filing cabinet: Articraft Data, Matt Zhou et al., record rec_drawer_cabinet_with_sliding_drawers_1997a0c3e5264693a49458eecb80d779, CC BY 4.0; modified: rewritten as a sand3d program
+s3_pedestal — Office pedestal cabinet: Articraft Data, Matt Zhou et al., record rec_drawer_cabinet_with_sliding_drawers_53de4887a6fa4240928b10bd2bfca2f3, CC BY 4.0; modified: rewritten as a sand3d program
+s3_bookcase_office — Bookcase: "Libreria" by deep.dubb, https://sketchfab.com/3d-models/a7830bb1abc348bd9390d126648377fd, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_table_meeting — Bench style three column standing desk: Articraft Data, Matt Zhou et al., record rec_standing_desk_with_synchronous_telescoping_legs_and_articulated_controls_9d0b44e302e14659af2cfe3f4fbd6903, CC BY 4.0; modified: rewritten as a sand3d program
+s3_coat_stand — Coatstand: "Coat Rack" by KurtSteiner, https://sketchfab.com/3d-models/df67fa2a371a483b80be5fb62e5fafce, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_bench_blue — Bench: "Model" by felteuks, https://sketchfab.com/3d-models/3f5c609f471146e0bb115e8e2bee63fe, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_bench_cast — Bench: "Bench" by seven.four, https://sketchfab.com/3d-models/26c89011fdbe4f3d8da663dd2ad7887a, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_buffet_louvered — Cabinet: "Buffet-bois" by amigos3d, https://sketchfab.com/3d-models/1bed3d79642943bea0e7a04b289011b4, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_reception_desk — Reception front desk: Articraft Data, Matt Zhou et al., record rec_desk_with_drawer_ba4acc9c90a5440187cd1f98a3bfbabc, CC BY 4.0; modified: rewritten as a sand3d program
+s3_kitchenette — Kitchenette: NVIDIA SimReady assets: "facilitySystem_kitchenette_module_a01" by NVIDIA, https://huggingface.co/datasets/nvidia/simready-assets/tree/653d91e182011f357cf1644013cc94ddf194d349/facilitySystem_kitchenette_module_a01, CC BY 4.0; modified: rewritten as a sand3d program
+s3_safe_old — Safe: "Old safe" by Fayruso, https://sketchfab.com/3d-models/a35cfc0346624133bbc7c4124e444548, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_coffee_table — Table: "DT71HP" by Interiors3D, https://sketchfab.com/3d-models/2bbbcfac3b5348f69a5a8a004b1245f2, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_sink_pedestal — Pedestal sink: "50s Sink Lowpoly" by sskjellestad, https://sketchfab.com/3d-models/32e1808fd32d44a1b3ff6236d5916738, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_fridge_old — Cabinet: "Fridge" by Messerhawke, https://sketchfab.com/3d-models/7bd62539798e4ec1bc99e12d6cca9fa1, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_gas_stove — Gas range: Articraft Data, Matt Zhou et al., record rec_conventional_oven_with_dropdown_door_0002, CC BY 4.0; modified: rewritten as a sand3d program
+s3_bathtub — Bathtub: "Corner bath" by LuthBird1, https://sketchfab.com/3d-models/88ccb2eabad3434e81c98f4008759cb5, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_toilet — Toilet: "Toilet" by aterallis, https://sketchfab.com/3d-models/4c016736d01d4718a82af036d08090ba, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_washer — Builtin undercounter washing machine: Articraft Data, Matt Zhou et al., record rec_frontload_washing_machine_52b94a9988454debb281bd4533b853e3, CC BY 4.0; modified: rewritten as a sand3d program
+s3_pot_terracotta — Flowerpot: "Kruka" by SQYW24, https://sketchfab.com/3d-models/0d24279daaef44a98b4b86dcd7d1525c, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_pot_clay — Flowerpot: "GD54_MOD3_A1_RusydiHairulanuar" by gd54rusydi, https://sketchfab.com/3d-models/14eddfd59aff4c3689d3f16048fc478b, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_hotbed — Greenhouse: "Greenhouse (LowPoly)" by MrRiskris, https://sketchfab.com/3d-models/a6d90b2042644d419fca05564f8974e2, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_rose_tall — Rose: "plant" by kd2314, https://sketchfab.com/3d-models/38196759bd39433d8ae4df5ef34f3ff2, CC-BY-4.0; modified: rewritten as a sand3d program
+s3_pergola — Arbor: "Pergala Old" by alex999m, https://sketchfab.com/3d-models/7b0498406857432f8776deeeb09b9731, CC-BY-4.0; modified: rewritten as a sand3d program

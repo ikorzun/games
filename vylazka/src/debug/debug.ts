@@ -1,0 +1,931 @@
+/**
+ * Отладочный API window.__vz. Ставится и в боевой сборке: смоук в Chromium гоняет именно её.
+ * Симуляцию можно заморозить и шагать вручную — так тесты не зависят от скорости машины.
+ */
+import { thingHqReady } from '../world/thing_hq';
+import { wallGaps } from '../world/wall_gone';
+import type { Decay } from '../systems/decay';
+import type { RoomFx } from '../game';
+import type { JumpStyle, JumpTarget } from '../systems/jumps';
+import { showcaseItems } from '../world/showcase';
+import { SIGN } from '../world/signs';
+import { normalizeLang } from '../core/i18n';
+import type { App } from '../app';
+import { STEP } from '../game';
+import { emptyInput } from '../player/input';
+import { DEFAULT_CONTROLLER } from '../player/controller';
+import type { Aabb } from '../world/colliders';
+import type { InputFrame } from '../player/input';
+import type { Quality } from '../render/renderer';
+import { FIGURE_MATERIALS } from '../world/figures';
+import type { FigureMaterial, FigureSpec } from '../world/figures';
+import { POSES } from '../world/props_people';
+import { FORMS, SPECIES_ID } from '../world/mushrooms';
+import type { Pose } from '../world/props_people';
+
+export interface VzDebugApi {
+  /** Игра загрузилась и показала первый кадр. */
+  ready(): boolean;
+  state(): Record<string, unknown>;
+  /** Остановить автоматическую симуляцию (кадры рисуются только по render()). */
+  freeze(on: boolean): void;
+  /** Сделать n шагов симуляции с заданным вводом и нарисовать кадр. */
+  step(n: number, input?: Partial<InputFrame>): Record<string, unknown>;
+  /**
+   * n оборотов главного цикла при замороженной симуляции: настоящий ввод с устройств → поворот луча →
+   * один шаг → кадр. Так проверяется путь ввода (клавиши, тач) без зависимости от частоты кадров.
+   */
+  tick(n: number): Record<string, unknown>;
+  render(): void;
+  teleport(x: number, y: number, z: number, yaw?: number, pitch?: number): void;
+  look(yaw: number, pitch: number): void;
+  /** Заглушить фонарь. */
+  fail(): void;
+  /** Заряд батарейки фонаря 0..1: задать (для проверок и кадров) и/или прочитать. */
+  charge(value?: number): number;
+  /** Трясти фонарь с уровнем level в течение seconds игрового времени. */
+  shake(level: number, seconds: number): Record<string, unknown>;
+  toggleLight(): void;
+  quality(q?: Quality): Quality;
+  info(): Record<string, unknown>;
+  /** Облако точек: сколько точек отдано видеокарте и сколько из них не спрятано отбором по расстоянию. */
+  cloudUsage(): { drawn: number; shown: number; cells: number };
+  /** Пыль тронутых вещей: сколько облаков живо и сколько в них точек. */
+  dust(): { clouds: number; points: number };
+  /** Проросшие грибы: место, род и насколько выросли (systems/spores.ts). */
+  spores(): { pos: number[]; kind: string; grow: number; species: string }[];
+  /** Стирание места: стёртость сейчас, с какой начат круг и все кривые (systems/decay.ts). */
+  wear(): { wear: number; base: number; decay: Decay; forms: Record<string, number> };
+  /** Ход времени в зале ожидания (systems/flow.ts); null — в этом мире время обычное. */
+  /**
+   * Давление помимо Осыпи (systems/pressure.ts): состояние; с видом — начать событие в помещении, где
+   * стоит игрок (ok — началось).
+   */
+  /** Птицы (systems/birds.ts): позы стаи в то время места, которое видит игрок, и состояние тех, кого можно спугнуть. */
+  birds(): { flock: { pos: number[]; flying: boolean; open: number }[]; leavers: { state: string; at: number[] }[] };
+  pressure(kind?: 'collapse' | 'squeeze'): { ok: boolean; rooms: number[]; here: boolean; active: { kind: string; phase: string; room: number; radius: number; ceil: number; origin: number[]; exits: number[][] } | null; falling: number; count: number; camDrop: number } | null;
+  flow(t?: number): { f: number; t: number; viewT: number; frozen: boolean; drift: number; strain: number; day: number; night: boolean; trains: number; toTrain: number; tear: number } | null;
+  start(): void;
+  pause(on: boolean): void;
+  lang(code?: string): string;
+  loseContext(ms?: number): void;
+  /** Сводка уровня: помещения, приметы, число мест для находок. */
+  level(): Record<string, unknown>;
+  /**
+   * Сцена — кусок места (world/piece.ts): сколько в нём комнат и клеток, где край — клетки куска, из которых есть ход в
+   * забытое, и куда этот ход (центр соседней клетки); null — помнится всё место.
+   */
+  piece(): { rooms: number; cells: number; edge: { at: [number, number, number]; to: [number, number, number] }[] } | null;
+  /**
+   * Белая комната (world/furnish_white.ts): помещение, коробка, цепь, насколько герой в ней (0..1) и перекрут сейчас
+   * (systems/warp.ts); null — на уровне её нет.
+   */
+  white(): { room: number; box: number[]; y: number[]; door: number[] | null; chain: { at: number[]; face: number[]; a: number; top: number }; inside: number; warp: { roll: number; fov: number; lens: number; open: number } } | null;
+  /** Перекрут, как от касания цепи белой комнаты: для кадров и проверок. */
+  warp(): void;
+  /**
+   * Странная комната (world/furnish_odd.ts; design.md, §37.1): род, помещение, коробка, где вещь и куда смотрит, чего касаться,
+   * насколько герой в ней (0..1), ощущение сейчас (systems/odd.ts) и сколько ещё молчит вещь; null — на уровне её нет. Поставить
+   * нужную на уровень — адресом ?odd=bayan | aquarium | tv | balloon (мимо жребия).
+   */
+  odd(): { kind: string; room: number; box: number[]; y: number[]; door: number[] | null; at: number[]; face: number[]; trigger: Record<string, unknown>; screen: Record<string, unknown> | null; inside: number; fx: Record<string, number>; cooldown: number } | null;
+  /** Ощущение странной комнаты, как от касания её вещи: для кадров и проверок. false — комнаты нет. */
+  oddFx(): boolean;
+  /** Встать в странной комнате в distance м от вещи, лицом к ней (со стороны прохода). false — комнаты нет. */
+  gotoOdd(distance?: number): boolean;
+  /** Встать в помещении рядом с приметой (по её id и номеру среди одноимённых) лицом к ней. false — такой нет. */
+  gotoLandmark(id: string, index?: number, distance?: number): boolean;
+  /** Встать в центр клетки помещения. */
+  gotoRoom(roomId: number, yawDeg?: number): boolean;
+  /**
+   * Встать снаружи помещения у его прохода, в `back` м от проёма, лицом к середине помещения (кадры комнат: промо, проверки
+   * глазами). Проход — пара соседних клеток навигации на одном полу, ближняя к середине. Нет прохода — false.
+   */
+  /** Песчаный зал: чёрный проём уровня, где стоит игрок (в зале ли), и что в зале (позвонки, рёбра, череп). Нет проёма — null. */
+  dunes(): Record<string, unknown> | null;
+  /** Встать снаружи чёрного проёма в `distance` м от него, лицом к нему. Нет проёма — false. */
+  gotoDunes(distance?: number): boolean;
+  /**
+   * Швы офис ↔ жёлтые (world/seams.ts; pressure.md, §4.1): швы этого уровня (нитка на полу: концы, ось, что на концах), у какого
+   * стоит игрок, сколько темно у шва, собрана ли другая версия места и за сколько миллисекунд, сколько раз прошли швом. Нет
+   * швов — null.
+   */
+  seam(): Record<string, unknown> | null;
+  /** Встать у шва i (по умолчанию первого) в `distance` м от нитки, лицом вдоль неё к середине помещения. Нет шва — false. */
+  gotoSeam(i?: number, distance?: number): boolean;
+  /** Пройти швом сейчас, где бы ни стоял: другая версия места на том же месте (собирается, если её нет). false — у места её нет. */
+  crossSeam(): boolean;
+  /**
+   * Метаслой (systems/meta.ts): показать обрывок колоды по id (или следующий) прямо сейчас, без лимбо; reel — снять перед этим
+   * запись мига «вспомнил», чтобы было что показать в обрывке-записи. Возвращает id показанного или null.
+   */
+  meta(id?: string, reel?: boolean): string | null;
+  roomDoorView(roomId: number, back?: number, pitchDeg?: number): { door: [number, number]; center: [number, number]; at: [number, number, number] } | false;
+  /** Вещи сна: что стоит, что с ним станет под взглядом, в каком оно состоянии. */
+  things(): Array<Record<string, unknown>>;
+  /**
+   * Кривая ощущений за сессию (systems/feel.ts): без аргумента — прочитать; level — поставить уровень кривой 0..1
+   * (она дальше пойдёт к своей цели сама), breath — выдох 0..1. Для снимков «начало сессии против её конца».
+   */
+  feel(level?: number, breath?: number): { level: number; breath: number; view: Record<string, number> };
+  /**
+   * Встать перед вещью лицом к ней — не ближе, чем достаёт тело (иначе вещь растворится от касания). false — места не
+   * нашлось или вещь, стоявшая целой, при пробах всё-таки растворилась.
+   */
+  gotoThing(id: number, distance?: number): boolean;
+  /**
+   * Поставить вещь прямо перед камерой на полу (на distance метров) с заданной судьбой; вернуть её номер.
+   * facing — повернуть вещь лицом к игроку (иначе она смотрит вдоль +z мира).
+   */
+  /** Подробная модель вещи памяти уже загружена (world/thing_hq.ts): для кадров — ждать её, а не снимать болванку. */
+  hqReady(kind: string): boolean;
+  spawnThing(kind: string, fate: 'shrink' | 'dust' | 'grow' | 'jump', distance?: number, facing?: boolean, lift?: number, turn?: number): number;
+  /**
+   * Поставить фигуру перед игроком (как партнёр ставит в инструменте): материал, поза-заготовка, на
+   * сколько впереди, на какой высоте, повернуть (град; 0 — лицом к игроку). Вернёт номер фигуры в списке.
+   */
+  figure(material: string, pose?: string, distance?: number, lift?: number, turn?: number): number;
+  /** Фигуры на уровне: ключ, материал, состояние, растворение частей и где стоят. */
+  figures(): { id: string; material: string; state: string; dissolve: number[]; at: number[]; yaw: number }[];
+  /**
+   * Оранжерея (systems/flowers.ts): сколько головок на уровне, сколько раскрыто больше чем наполовину, на сколько градусов в
+   * среднем раскрытые отвернулись от покоя к свету; shown, far, culled — что нарисовал рендер в последнем кадре.
+   */
+  /** Головки цветов уровня: где и какой формы (номер в world/flowers.ts, HEADS) — для кадров вплотную. */
+  flowerSites(): { pos: number[]; form: number }[];
+  /** Трава: плиток у места и у луга, помещение с травой, сколько нарисовано в последнем кадре (и дальних, и отсечённых). */
+  /** Трава: плиток у места и у кармана, помещение с травой, что в кадре (ближних, дальних, у горизонта, отсечено, треугольников, где кончается) и вытоптанные круги. */
+  /** Трава тянется к свету (systems/grass.ts, LEAN) или нет — для кадров «до и после». */
+  grassLean(on: boolean): void;
+  /** Точка мира на экране (доли кадра, y вниз) и видна ли она — для проверок раскладки и кадров. */
+  project(p: [number, number, number]): { x: number; y: number; visible: boolean };
+  grass(): { level: number; pocket: number; room: number | null; lean: number | null; rustle: { gain: number; rise: number; fall: number; at: number[] } | null; shown: number; far: number; horizon: number; culled: number; tris: number; end: number; clear: [number, number, number, number][]; body: { at: [number, number]; floor: number; press: number; caps: number[][] } | null };
+  flowers(): { n: number; open: number; turn: number; lit: number; beam: boolean; gaze: boolean; shown: number; far: number; culled: number; eye?: number[]; from?: number[] | null; dir?: number[] | null; probe: number[][] };
+  /** Почему вещь видна или не видна: расстояние, попадание в луч (dot против нужного need), путь луча до преграды. */
+  sees(id: number): Record<string, number> | null;
+  /** Искомое воспоминание: его id, вещь и где она (null — сейчас ничего не ищут). */
+  memory(): { id: string; thing: number; pos: number[] } | null;
+  /** Поторопить следующее воспоминание: оно придёт на ближайшем шаге. */
+  reveal(): void;
+  /**
+   * Свет памяти (world/memory_light.ts) у вещи с этим номером, даже если её не ищут; null — снять. false — такой
+   * вещи нет. Вещь при этом перестаёт меняться под взглядом, как экспонат лимбо.
+   */
+  memLight(id: number | null): boolean;
+  /** Встать перед вещью искомого воспоминания. */
+  gotoMemory(): boolean;
+  /**
+   * В карманном пространстве: встать перед выходом (красным проёмом) или перед главным предметом (макетом
+   * в кукольном домике) и посмотреть на него. distance — с какого расстояния, м. false — такого здесь нет.
+   */
+  gotoPocket(what: 'exit' | 'focus', distance?: number): boolean;
+  /** Начать скачок: в карманное пространство ('void', 'meadow', 'dollhouse'), в другое место ('elsewhere') или в лимбо. */
+  jump(to: JumpTarget, style?: JumpStyle): boolean;
+  /** Встать в помещение с особенностью: 'strobe', 'dark', 'wire', 'thin'. */
+  gotoFx(fx: RoomFx): boolean;
+  /** Считать всё вспомненным: место рассыплется, игрок попадёт в лимбо. */
+  finish(): void;
+  /** Вспышки «почти незаметные» (как в настройке игрока); false — мягкие (по умолчанию: полных больше нет). */
+  faintFlash(on: boolean): void;
+  /** Зоны среды и обвалы уровня. */
+  hazards(): Record<string, unknown>;
+  /** Миг: место будто стёрто до конца — часы встают на 00:00:00, кадр и звук обрываются (для снимков и проверок). */
+  moment(): void;
+  /**
+   * Выпустить рой в hops клетках от игрока (сразу настороже), показать его фигурой без охоты либо пустить приметой
+   * без тела (trace: вдали, за стеной — грибы в углах у её пути и далёкий песок; hops не нужен). glimpse — фигурой впереди, в луче,
+   * как первое явление сна (hops не нужен); false — места впереди нет.
+   */
+  swarm(cmd: 'release' | 'appear' | 'sleep' | 'trace' | 'glimpse', hops?: number): boolean;
+  /** Поставить фазу режиссёра страха: 0 — ложные события, 1 — рой мелькает, 2 — охотится. */
+  phase(n: 0 | 1 | 2): void;
+  /** Лестницы уровня и комнаты-аномалии. */
+  anomalies(): Record<string, unknown>;
+  /** Выключить рой, режиссёра и аномалии: для проверок, которым они мешают. */
+  calm(on: boolean): void;
+  /** Пустить волну сонара на ближайшем шаге (вариант A): по тихому слою пробегает план. */
+  sonar(): void;
+  /** Прорехи в стёртых стенах сейчас (world/wall_gone.ts): середина прорехи, ось стены, где за стеной и пол. */
+  wallGaps(): { at: [number, number, number]; normal: [number, number]; width: number }[];
+  /** Включить или выключить тень фонаря (для сравнения кадров). */
+  shadows(on: boolean): void;
+  /** Свет натриевых ламп оранжереи вкл/выкл (для сравнения кадров «до» и «после»; трубки светятся всегда); gain — его сила. */
+  lampLight(on: boolean, gain?: number): void;
+  /** Облако точек вкл/выкл: выкл — мир рисуется сплошными поверхностями (для сравнения кадров). */
+  scan(on: boolean): void;
+  /** Проверка «как в Safari»: у каждой сетки на сценах хватает каждого канала на все вершины (пусто — всё в порядке). */
+  geometryAudit(): string[];
+  /** Плоские вещи уровня: картонки (standee) и проекции (veil) — что изображено, где стоит и куда смотрит. */
+  flats(): Array<Record<string, unknown>>;
+  /**
+   * Встать перед плоской вещью лицом к ней: distance — на каком расстоянии от её плоскости, side — сдвиг
+   * вбок, м (чтобы посмотреть на неё не в лоб). Отрицательное расстояние — встать с изнанки. false — такой нет.
+   */
+  gotoFlat(index: number, distance?: number, side?: number): boolean;
+  /** Показать или скрыть проекции и картинки экранов (чтобы сравнить кадр с ними и без них). */
+  slides(on: boolean): void;
+  /**
+   * Предметы обстановки как объекты (world/objects.ts): имя, место, габариты, есть ли преграда, картонка
+   * ли это, и что с ним сейчас: here — стоит, going — растворяется, gone — его нет, coming — собирается,
+   * left — вместо него теперь отдельная вещь. group — предмет стоит в варианте комнаты, который
+   * может быть скрыт (тогда коснуться его нельзя).
+   */
+  objects(): Array<{ id: number; name: string; at: number[]; rot: number; min: number[]; max: number[]; solid: boolean; flat: boolean; group: string | null; state: string; dis: number; form: number; keeps: boolean }>;
+  /**
+   * Встать перед объектом лицом к нему: distance — на каком расстоянии от его передней стороны, м.
+   * false — такого объекта нет.
+   */
+  gotoObject(id: number, distance?: number): boolean;
+  /** Какие картинки выставочных экранов загружены из файлов (остальные экраны показывают «нет сигнала»). */
+  screens(): string[];
+  /** Какие листы бумаги (world/papers.ts) уже загружены. */
+  papers(): string[];
+  /** Карточки от руки на стенах уровня (world/signs.ts, вид card). */
+  notes(): { id: string; at: number[]; n: number[] }[];
+  /** Встать перед карточкой номер index на расстоянии distance метров, лицом к ней. */
+  gotoNote(index: number, distance?: number): boolean;
+  /** Нарисовать кадр и вернуть его яркость сеткой 32×18, строка 0 — верхняя. */
+  probe(): number[];
+  /** Средний цвет кадра (0..255) и доля красных точек: виден ли красная сетка. */
+  probeColor(): { r: number; g: number; b: number; red: number; dark: number };
+  missingKeys(): string[];
+  /** Какие листы-картинки (плакаты ГО, план убежища) уже загружены. */
+  sheets(): string[];
+  /**
+   * Насколько пёстрая клетка листа в атласе надписей: разброс яркости её точек. У пустого листа он
+   * около 10 (только пятна старения), у листа с плакатом — десятки. −1 — такого листа или атласа нет.
+   */
+  sheetContrast(id: string): number;
+  /** Где на уровне висят листы-картинки: id листа, середина и куда он смотрит. */
+  sheetMarks(): { id: string; at: number[]; n: number[] }[];
+  /** Встать перед листом с этим номером (из sheetMarks) лицом к нему. false — такого листа нет. */
+  gotoSheet(index: number, distance?: number): boolean;
+  /** Состояние звука: загружено, что просили и что прозвучало, какие петли идут. */
+  /** Предметы витрины (?level=show) по порядку расстановки: имя, крепление, высота. */
+  showcase(): { name: string; mount: string; h: number; y: number }[];
+  /**
+   * Состояние звука. fresh — сначала пересчитать, чего игра хочет от петель (без хода часов звука): иначе это делает только
+   * цикл отрисовки, а он под программной отрисовкой CI иногда почти стоит (смоук Playgama fa44320: «гул вернулся» не дождался).
+   */
+  audio(fresh?: boolean): ReturnType<import('../audio/engine').AudioEngine['status']>;
+  /** Состояние сюжета «Невостребованное» (systems/koma.ts). */
+  koma(): unknown;
+  /** Довести сюжет до сцены upTo включительно (проверки поздних актов без десятка снов). */
+  komaSkip(upTo: string, leave?: number): unknown;
+  /** Тело Смотрителя (A4_E03): 'come' — встать у стола перед взглядом (только в лимбо, один раз), 'go' — рассеяться; без команды — состояние. */
+  caretaker(cmd?: 'prepare' | 'come' | 'go'): { ok: boolean; state: string; why: string | null; at: number[]; core: number[] };
+  mute(on: boolean): void;
+}
+
+declare global {
+  interface Window {
+    __vz?: VzDebugApi;
+  }
+}
+
+export function installDebug(app: App): void {
+  const game = (): App['game'] => app.game;
+  const api: VzDebugApi = {
+    ready: () => app.ready,
+    state: () => ({
+      ...game().snapshot(),
+      paused: app.lifecycle.paused,
+      pauseReasons: app.lifecycle.list(),
+      overlay: app.overlay.mode,
+      screen: app.screen,
+      seed: app.seed,
+      rank: app.rank,
+      profile: { sorties: app.profile.sorties, successes: app.profile.successes, archive: [...app.profile.archive], memories: JSON.parse(JSON.stringify(app.profile.memories ?? {})) },
+      platform: app.platform.id,
+      touch: app.touchMode,
+      drag: app.dragMode,
+      motion: app.motion.state,
+      scenes: app.dreamView,
+    }),
+    freeze: (on) => {
+      app.frozen = on;
+    },
+    step: (n, input) => {
+      const f = { ...emptyInput(), ...input };
+      if (input?.lookYaw || input?.lookPitch) game().look(f.lookYaw, f.lookPitch);
+      // Кадр на экран — только после последнего шага: остальные считают камеру и свет без видеокарты.
+      for (let i = 0; i < n; i++) app.advance(f, 1, 1, STEP, i === n - 1);
+      return api.state();
+    },
+    tick: (n) => {
+      for (let i = 0; i < n; i++) {
+        const input = app.pollInput();
+        if (input.pause) {
+          app.lifecycle.set('user', true);
+          break;
+        }
+        game().look(input.lookYaw, input.lookPitch);
+        app.advance(input, 1, 1, STEP, i === n - 1);
+      }
+      return api.state();
+    },
+    render: () => game().draw(1, STEP),
+    teleport: (x, y, z, yaw, pitch) => game().teleport(x, y, z, yaw, pitch),
+    look: (yaw, pitch) => game().look(yaw, pitch),
+    fail: () => game().light.forceFail(),
+    charge: (value) => {
+      const l = game().light;
+      if (value !== undefined) l.charge = Math.max(0, Math.min(1, value));
+      return l.charge;
+    },
+    shake: (level, seconds) => {
+      const steps = Math.round(seconds / STEP);
+      for (let i = 0; i < steps; i++) {
+        // Удерживаем уровень: детектор сам затухает между толчками.
+        game().shake.level = Math.max(game().shake.level, level);
+        app.advance(emptyInput(), 1, 1, STEP, i === steps - 1);
+      }
+      return api.state();
+    },
+    // Там, где фонаря нет (офис), щёлкать нечем — как и у настоящей кнопки.
+    toggleLight: () => {
+      if (game().hasLight) game().light.toggle();
+    },
+    quality: (q) => {
+      if (q) app.setQuality(q);
+      return game().renderer.quality;
+    },
+    info: () => ({ ...game().renderer.info(), fps: app.fps }),
+    cloudUsage: () => game().renderer.cloudUsage(),
+    dust: () => game().renderer.dustInfo(),
+    spores: () => (game().spores?.sites ?? []).filter((q) => q.grow > 0.03).map((q) => ({ pos: [...q.pos], kind: q.kind, grow: +q.grow.toFixed(3), species: SPECIES_ID[Math.floor(q.form / FORMS)] ?? '' })),
+    birds: () => {
+      const g = game();
+      const t = g.flow ? g.flow.viewT : 0;
+      const f = g.flock;
+      return {
+        flock: f ? Array.from({ length: f.count }, (_, i) => f.pose(i, t)).map((p) => ({ pos: p.pos.map((v) => +v.toFixed(2)), flying: p.flying, open: +p.open.toFixed(2) })) : [],
+        leavers: g.leavers.map((l) => ({ state: l.state, at: l.perch.pos.map((v) => +v.toFixed(2)) })),
+      };
+    },
+    pressure: (kind) => {
+      const g = game();
+      const p = g.pressure;
+      if (!p) return null;
+      const ok = kind ? g.startPressure(kind) : false;
+      const a = p.active;
+      return {
+        ok,
+        rooms: [...g.pressureRooms.keys()],
+        here: g.pressureHere(),
+        active: a ? { kind: a.kind, phase: a.phase, room: a.room.id, radius: a.radius, ceil: a.ceil, origin: [...a.origin], exits: a.room.exits.map((e) => [...e]) } : null,
+        falling: p.falling,
+        count: p.count,
+        camDrop: p.camDrop([g.body.x, g.body.z]),
+      };
+    },
+    flow: (t) => {
+      const f = game().flow;
+      // С числом — перевести часы места (и снимок) на это время: посмотреть вечер, не дожидаясь его.
+      if (f && typeof t === 'number') f.seek(t);
+      return f ? { f: f.f, t: f.t, viewT: f.viewT, frozen: f.frozen, drift: f.drift, strain: f.strain, day: f.day, night: f.night, trains: f.trains, toTrain: f.toTrain, tear: game().lastTear } : null;
+    },
+    wear: () => {
+      const forms: Record<string, number> = {};
+      for (const i of game().illusions?.list ?? []) forms[String(i.form)] = (forms[String(i.form)] ?? 0) + 1;
+      return { wear: game().wear, base: game().wearBase, decay: game().decay, forms };
+    },
+    start: () => app.start(),
+    pause: (on) => app.lifecycle.set('user', on),
+    lang: (code) => {
+      if (code) app.setLang(normalizeLang(code));
+      return app.i18n.lang;
+    },
+    loseContext: (ms) => game().renderer.debugLoseContext(ms),
+    level: () => {
+      const l = app.level;
+      return {
+        seed: l.layout?.seed ?? null,
+        wear: l.wear ?? 0,
+        world: l.world ?? 'shelter',
+        rank: l.layout?.rank ?? null,
+        tiers: l.layout?.tierCount ?? 1,
+        chunks: l.chunks.length,
+        triangles: l.chunks.reduce((n, c) => n + c.mesh.index.length / 3, 0),
+        colliders: l.colliders.boxes.length,
+        spots: l.spots.length,
+        spawn: [...l.spawn.pos],
+        rooms: (l.layout?.rooms ?? []).map((r) => ({ id: r.id, type: r.type, tier: r.tier, cells: r.cells.length })),
+        sky: l.skyRoom ?? null,
+        green: l.greenRoom ?? null,
+        lamps: l.lamps ? { pos: l.lamps.pos.map((p) => [...p]), box: [...l.lamps.box], y: [...l.lamps.y] } : null,
+        grass: l.grassRoom ?? null,
+        white: l.whiteRoom?.room ?? null,
+        odd: l.oddRoom ? { kind: l.oddRoom.kind, room: l.oddRoom.room } : null,
+        landmarks: l.landmarks.map((m) => ({ id: m.id, room: m.room, tier: m.tier })),
+        flats: (l.flats ?? []).map((f) => ({ kind: f.kind, what: f.what, room: f.room, tier: f.tier })),
+      };
+    },
+    piece: () => {
+      const g = game();
+      const p = g.piece;
+      const nav = g.level?.nav ?? [];
+      if (!p) return null;
+      const edge: { at: [number, number, number]; to: [number, number, number] }[] = [];
+      for (const id of p.edge) {
+        const n = nav[id]!;
+        for (const l of n.links) {
+          const o = nav[l]!;
+          if (p.nodes.has(l) || o.tier !== n.tier || Math.abs(o.y - n.y) > 0.2) continue;
+          edge.push({ at: [n.x, n.y, n.z], to: [o.x, o.y, o.z] });
+        }
+      }
+      return { rooms: p.count, cells: p.nodes.size, edge };
+    },
+    white: () => {
+      const g = game();
+      const w = g.level?.whiteRoom;
+      if (!w) return null;
+      return { room: w.room, box: [...w.box], y: [...w.y], door: w.door ? [...w.door] : null, chain: { at: [...w.chain.at], face: [...w.chain.face], a: w.chain.a, top: w.chain.top }, inside: g.whiteness, warp: g.warpNow() };
+    },
+    warp: () => game().forceWarp(),
+    odd: () => {
+      const g = game();
+      const o = g.level?.oddRoom;
+      if (!o) return null;
+      const t = o.trigger;
+      const trigger = 'box' in t ? { box: [[...t.box[0]], [...t.box[1]]] } : { line: [[...t.line[0]], [...t.line[1]]], r: t.r };
+      const fx = g.oddNow();
+      return {
+        kind: o.kind,
+        room: o.room,
+        box: [...o.box],
+        y: [...o.y],
+        door: o.door ? [...o.door] : null,
+        at: [...o.at],
+        face: [...o.face],
+        trigger,
+        screen: o.screen ? { at: [...o.screen.at], n: [...o.screen.n], w: o.screen.w, h: o.screen.h } : null,
+        inside: g.oddness,
+        fx: { ...fx },
+        cooldown: g.oddCooldown,
+      };
+    },
+    oddFx: () => game().forceOdd(),
+    gotoOdd: (distance = 2.2) => {
+      const g = game();
+      const o = g.level?.oddRoom;
+      if (!o) return false;
+      // Отступить от вещи к проходу (лицо вещи смотрит туда), но не дальше стены.
+      const back = (o.face[0] !== 0 ? o.box[2] - o.box[0] : o.box[3] - o.box[1]) / 2 - 0.45;
+      const d = Math.max(0.9, Math.min(distance, back));
+      const x = o.at[0] + o.face[0] * d;
+      const z = o.at[2] + o.face[1] * d;
+      g.teleport(x, o.y[0] + 0.02, z, Math.atan2(o.face[0], o.face[1]), 0);
+      return true;
+    },
+    flats: () => (app.level.flats ?? []).map((f) => ({ ...f, at: [...f.at], n: [...f.n] })),
+    gotoFlat: (index, distance = 3, side = 0) => {
+      const f = (app.level.flats ?? [])[index];
+      if (!f) return false;
+      game().debugHome();
+      // Вбок — вдоль плоскости картинки: поворот нормали на четверть оборота вокруг вертикали.
+      const x = f.at[0] + f.n[0] * distance + f.n[2] * side;
+      const z = f.at[2] + f.n[2] * distance - f.n[0] * side;
+      game().teleport(x, f.floor, z, Math.atan2(-(f.at[0] - x), -(f.at[2] - z)), 0);
+      return true;
+    },
+    slides: (on) => {
+      game().renderer.debugSlidesOff = !on;
+    },
+    objects: () =>
+      (game().illusions?.list ?? []).map((i) => ({ id: i.obj.id, name: i.obj.name, at: [...i.obj.at], rot: i.obj.rot, min: [...i.obj.min], max: [...i.obj.max], solid: i.obj.solid, flat: i.obj.flat, group: i.obj.group ?? null, state: i.state, dis: +i.dis.toFixed(3), form: i.form, keeps: game().keepsItself(i.obj.id) })),
+    gotoObject: (id, distance = 1.6) => {
+      const o = game().illusions?.get(id)?.obj;
+      if (!o) return false;
+      game().debugHome();
+      // Перед объектом — со стороны его оси +z (см. Xf.pt): у мебели она смотрит от стены в помещение.
+      const fx = o.rot === 1 ? 1 : o.rot === 3 ? -1 : 0;
+      const fz = o.rot === 0 ? 1 : o.rot === 2 ? -1 : 0;
+      const cx = (o.min[0] + o.max[0]) / 2;
+      const cz = (o.min[2] + o.max[2]) / 2;
+      // Передняя сторона — край габаритов вдоль оси +z.
+      const half = Math.abs(fx) > 0 ? (o.max[0] - o.min[0]) / 2 : (o.max[2] - o.min[2]) / 2;
+      const x = cx + fx * (half + distance);
+      const z = cz + fz * (half + distance);
+      // Пол яруса, на котором стоит объект (ярусы идут через 4,5 м вниз; настенное висит выше пола).
+      const floor = Math.floor((o.min[1] + 0.3) / 4.5) * 4.5;
+      game().teleport(x, floor, z, Math.atan2(-(cx - x), -(cz - z)), 0);
+      return true;
+    },
+    screens: () => [...app.screenIds],
+    papers: () => [...app.paperIds],
+    notes: () => (app.level.notes ?? []).map((m) => ({ id: m.id, at: [...m.at], n: [...m.n] })),
+    gotoNote: (index, distance = 1.2) => {
+      const m = (app.level.notes ?? [])[index];
+      if (!m) return false;
+      game().debugHome();
+      const x = m.at[0] + m.n[0] * distance;
+      const z = m.at[2] + m.n[2] * distance;
+      const floor = Math.floor((m.at[1] + 0.3) / 4.5) * 4.5;
+      game().teleport(x, floor, z, Math.atan2(-(m.at[0] - x), -(m.at[2] - z)), 0);
+      return true;
+    },
+    gotoLandmark: (id, index = 0, distance = 2.2) => {
+      const l = app.level;
+      const m = l.landmarks.filter((x) => x.id === id)[index];
+      if (!m) return false;
+      game().debugHome();
+      // Пробуем встать в узлах помещения приметы и соседних с ним: подходим на нужную дистанцию,
+      // даём контроллеру вытолкнуть игрока из мебели и только потом целимся.
+      const own = l.nav.filter((n) => n.room === m.room);
+      const near = own.flatMap((n) => n.links.map((i) => l.nav[i]!)).filter((n) => n.room !== m.room);
+      const nodes = [...own, ...near].sort((a, b) => Math.abs(Math.hypot(a.x - m.x, a.z - m.z) - distance) - Math.abs(Math.hypot(b.x - m.x, b.z - m.z) - distance));
+      for (const n of nodes) {
+        const dx = m.x - n.x;
+        const dz = m.z - n.z;
+        const d = Math.hypot(dx, dz) || 1;
+        const k = Math.max(0, (d - distance) / d);
+        game().teleport(n.x + dx * k, n.y, n.z + dz * k);
+        app.advance(emptyInput(), 2, 1, STEP);
+        game().aimAt(m.x, m.y, m.z);
+        app.advance(emptyInput(), 2, 1, STEP);
+        const st = game().snapshot() as { pos: number[]; beamDist: number };
+        const dist = Math.hypot(m.x - st.pos[0]!, m.y - (st.pos[1]! + 1), m.z - st.pos[2]!);
+        // Примета видна: луч доходит до неё, а не упирается в преграду раньше.
+        if (dist > 0.6 && dist < 6 && st.beamDist >= dist - 1.2) return true;
+      }
+      return false;
+    },
+    feel: (level, breath) => {
+      const f = game().feel;
+      if (level !== undefined) f.level = Math.max(0, Math.min(1, level));
+      if (breath !== undefined) f.breath = Math.max(0, Math.min(1, breath));
+      return { level: f.level, breath: f.breath, view: { ...game().feelNow } };
+    },
+    things: () => game().things.list.map((t) => ({ id: t.id, kind: t.kind, state: t.state, fate: t.fate, memory: t.memory, still: t.still, gaze: t.gaze, scale: t.scale, dissolve: t.dissolve, form: t.form, pos: [...t.pos] })),
+    hqReady: (kind) => thingHqReady(kind) !== null,
+    spawnThing: (kind, fate, distance = 2.5, facing = false, lift = 0, turn = 0) => {
+      const g = game();
+      const st = g.snapshot() as { pos: number[]; aim: number[] };
+      const yaw = st.aim[0]!;
+      const x = st.pos[0]! - Math.sin(yaw) * distance;
+      const z = st.pos[2]! - Math.cos(yaw) * distance;
+      // lift — поднять над полом (кадры вплотную: вещь на уровне глаз), turn — довернуть, град.
+      return g.addThing(kind, [x, st.pos[1]! + lift, z], (facing ? yaw : 0) + (turn * Math.PI) / 180, fate).id;
+    },
+    figure: (material, pose = 'stand', distance = 2.5, lift = 0, turn = 0) => {
+      const g = game();
+      const st = g.snapshot() as { pos: number[]; aim: number[] };
+      const yaw = st.aim[0]!;
+      const x = st.pos[0]! - Math.sin(yaw) * distance;
+      const z = st.pos[2]! - Math.cos(yaw) * distance;
+      const id = `debug_${material}_${pose}`.replace(/[^a-z0-9_]/g, '_').slice(0, 40);
+      const base = (POSES as Record<string, Pose>)[pose] ?? POSES.stand;
+      const spec: FigureSpec = {
+        id,
+        name: id,
+        pose: JSON.parse(JSON.stringify(base)) as Pose,
+        material: (FIGURE_MATERIALS as readonly string[]).includes(material) ? (material as FigureMaterial) : 'wood',
+        rule: { worlds: ['shelter', 'office', 'yellow', 'station'], rooms: [], anchor: 'middle', facing: 'player', lift, count: 1 },
+        yaw: 0,
+        offset: [0, 0],
+      };
+      // Лицом к игроку: фигура смотрит туда, откуда на неё смотрят (+ доворот).
+      g.addDebugFigure(spec, [x, st.pos[1]! + lift, z], yaw + (turn * Math.PI) / 180);
+      return g.figures.list.length - 1;
+    },
+    figures: () => game().figures.list.map((f) => ({ id: f.id, material: f.material, state: f.state, dissolve: f.pieces.map((p) => p.dissolve), at: [...f.at], yaw: f.yaw })),
+    flowers: () => {
+      const sites = game().flowers?.sites ?? [];
+      const open = sites.filter((q) => q.open > 0.5);
+      const turn = open.length ? open.reduce((a, q) => a + Math.acos(Math.max(-1, Math.min(1, q.dir[0] * q.face[0] + q.dir[1] * q.face[1] + q.dir[2] * q.face[2]))), 0) / open.length : 0;
+      const fl = game().flowers;
+      const li = fl?.light;
+      const r3 = (v: readonly number[]) => v.map((q) => +q.toFixed(2));
+      const probe = sites.slice(0, 3).map((q) => r3(q.pos));
+      return { n: sites.length, open: open.length, turn: +((turn * 180) / Math.PI).toFixed(1), lit: fl?.litCount ?? 0, beam: !!li?.beam, gaze: !!li?.gaze, ...game().renderer.flowerStats, ...(li ? { eye: r3(li.eye), from: li.beam ? r3(li.beam.origin) : null, dir: li.beam ? r3(li.beam.dir) : li.gaze ? r3(li.gaze.dir) : null } : {}), probe };
+    },
+    flowerSites: () => (game().flowers?.sites ?? []).map((q) => ({ pos: [...q.pos], form: q.form })),
+    project: (p) => game().renderer.project(p),
+    grassLean: (on) => {
+      game().leanOff = !on;
+    },
+    grass: () => {
+      const g = game();
+      const b = g.level?.grassBody;
+      const here = g.where === 'pocket' ? g.pocketGrass : g.levelGrass;
+      const lm = here?.lean;
+      const lean = lm ? lm.data.reduce((m, v) => Math.max(m, v), 0) / 255 : null;
+      // Шорох травы этого кадра (systems/grass.ts, RUSTLE): громкость, сколько травы тянется и отпускает (м²/с) и где.
+      const rs = here?.rustle;
+      const rustle = rs ? { gain: +g.grassRustle.gain.toFixed(3), rise: +rs.rise.toFixed(2), fall: +rs.fall.toFixed(2), at: rs.at.map((v) => +v.toFixed(2)) } : null;
+      return { level: g.levelGrass?.sites.length ?? 0, pocket: g.pocketGrass?.sites.length ?? 0, room: g.level?.grassRoom ?? null, lean, rustle, ...g.renderer.grassStats, clear: (g.level?.grassClear ?? []).map((c) => [...c] as [number, number, number, number]), body: b ? { at: [b.at[0], b.at[1]], floor: b.floor, press: g.bodyPress, caps: b.caps.map((c) => c.map((q) => +q.toFixed(3))) } : null };
+    },
+    gotoThing: (id, distance = 2.2) => {
+      const g = game();
+      const t = g.things.list.find((x) => x.id === id);
+      if (!t) return false;
+      const [x, y, z] = t.pos;
+      const aimY = y + Math.max(0.2, t.radius * 0.6);
+      // Тело игрока на пробе не должно задевать мебель: упёрся в стол — коснулся его, стол растворился вместе со всем,
+      // что на нём лежит, — и с искомой вещью (так падала проверка CI 17.11: вещь «gone» в 1,6 м от игрока).
+      const R = DEFAULT_CONTROLLER.radius + 0.06;
+      const boxes: Aabb[] = [];
+      const free = (px: number, py: number, pz: number): boolean =>
+        !g.colliders
+          .query(px - R, pz - R, px + R, pz + R, boxes)
+          .some((b) => !b.off && !b.gone && b.maxY > py + 0.08 && b.minY < py + DEFAULT_CONTROLLER.height && b.maxX > px - R && b.minX < px + R && b.maxZ > pz - R && b.minZ < pz + R);
+      const tryFrom = (px: number, py: number, pz: number): boolean => {
+        // Встать можно только туда, где есть пол: точка за стеной уровня — не место (вещь у самой стены
+        // «видна» и оттуда — в пределах допуска на мебель, — но игрок там падает).
+        if (g.colliders.raycast(px, py + 1, pz, 0, -1, 0, 1.6) >= 1.6) return false;
+        if (!free(px, py, pz)) return false;
+        g.teleport(px, py, pz);
+        app.advance(emptyInput(), 2, 1, STEP);
+        g.aimAt(x, aimY, z);
+        app.advance(emptyInput(), 2, 1, STEP);
+        // Вещь видна так же строго, как это требует игра: в луче и не заслонена от камеры.
+        const v = api.sees(id);
+        return v !== null && v.d! > 0.4 && v.d! < 5.5 && v.dot! >= v.need! + 0.01 && v.los! >= v.d! - 0.45;
+      };
+      // Пол яруса (или карманного пространства) под вещью.
+      const floor = Math.floor((y + 0.3) / 4.5) * 4.5;
+      // Не ближе, чем достаёт тело: каждая проба — это шаги игры, и вставший вплотную к крупной вещи задевает её —
+      // по правилу «коснулся — растворилось» она уходит. Так проба мест сама губила цель воспоминания, и вспоминать
+      // было нечего (нашла проверка CI 17.11: вещь «gone», игрок смотрит прямо на неё).
+      const near = Math.max(1.1, t.radius + 0.9);
+      const wasIdle = t.state === 'idle';
+      // Сначала поближе с разных сторон, потом — с расстояния: вещь может стоять среди мебели.
+      for (const r of [near, Math.max(near, distance), Math.max(near, 1.7), Math.max(near, 3)]) {
+        for (let i = 0; i < 12; i++) {
+          const a = (i * Math.PI) / 6;
+          if (tryFrom(x + Math.cos(a) * r, floor, z + Math.sin(a) * r)) return !wasIdle || t.state === 'idle';
+        }
+      }
+      return false;
+    },
+    sees: (id) => {
+      const g = game();
+      const t = g.things.list.find((x) => x.id === id);
+      const st = g.snapshot() as { eye: number[]; lightDir: number[]; light: { intensity: number } };
+      if (!t) return null;
+      const target = [t.pos[0], t.pos[1] + Math.max(0.2, t.radius * 0.6), t.pos[2]];
+      const dx = target[0]! - st.eye[0]!;
+      const dy = target[1]! - st.eye[1]!;
+      const dz = target[2]! - st.eye[2]!;
+      const d = Math.hypot(dx, dy, dz);
+      const los = g.colliders.raycast(st.eye[0]!, st.eye[1]!, st.eye[2]!, dx / d, dy / d, dz / d, d);
+      return { d, dot: (dx * st.lightDir[0]! + dy * st.lightDir[1]! + dz * st.lightDir[2]!) / d, need: 0.972 - Math.min(0.12, (t.radius / d) * 0.45), los, light: st.light.intensity, radius: t.radius };
+    },
+    memory: () => {
+      const m = game().session?.active;
+      const t = game().things.list.find((x) => x.memory);
+      return m && t ? { id: m.def.id, thing: t.id, pos: [...t.pos] } : null;
+    },
+    reveal: () => {
+      game().session?.rush();
+    },
+    memLight: (id) => {
+      const g = game();
+      const t = id === null ? null : (g.things.list.find((x) => x.id === id) ?? null);
+      // Под взглядом такая вещь не меняется (как экспонат лимбо): иначе разглядывание её и рассыпает.
+      if (t) t.still = true;
+      g.memLightDebug = t;
+      return id === null || t !== null;
+    },
+    gotoMemory: () => {
+      const t = game().things.list.find((x) => x.memory);
+      return t ? api.gotoThing(t.id, 2.2) : false;
+    },
+    gotoPocket: (what, distance = what === 'exit' ? 1.6 : 1.5) => {
+      const g = game();
+      const p = g.pocket;
+      const at = what === 'exit' ? p?.exit : p?.focus;
+      if (!p || !at) return false;
+      // К макету подходим со стороны точки появления; к выходу — по его оси (проём стоит поперёк z и
+      // смотрит на точку появления).
+      const dx = what === 'exit' ? 0 : p.spawn.pos[0] - at[0];
+      const dz = what === 'exit' ? 1 : p.spawn.pos[2] - at[2];
+      const d = Math.hypot(dx, dz) || 1;
+      g.teleport(at[0] + (dx / d) * distance, p.spawn.pos[1], at[2] + (dz / d) * distance);
+      app.advance(emptyInput(), 2, 1, STEP);
+      g.aimAt(at[0], what === 'exit' ? at[1] + 1.2 : at[1], at[2]);
+      app.advance(emptyInput(), 2, 1, STEP);
+      return true;
+    },
+    jump: (to, style = 'cut') => game().beginJump({ cause: 'gaze', style, to }, []),
+    gotoFx: (fx) => {
+      for (const [room, kind] of game().roomFx) if (kind === fx) return api.gotoRoom(room);
+      return false;
+    },
+    finish: () => game().debugFinish(),
+    faintFlash: (on) => {
+      game().faintFlash = on;
+    },
+    hazards: () => ({
+      zones: app.level.zones.map((z) => ({ kind: z.kind, tier: z.tier, center: [(z.minX + z.maxX) / 2, z.maxY, (z.minZ + z.maxZ) / 2] })),
+      collapses: app.level.collapses.map((c) => ({ id: c.id, tier: c.tier, center: c.center })),
+    }),
+    swarm: (cmd, hops = 5) => {
+      const g = game();
+      const sw = g.swarm;
+      if (!sw) return false;
+      if (cmd === 'sleep') {
+        sw.mode = 'dormant';
+        sw.cohesion = 0;
+        return true;
+      }
+      if (cmd === 'trace') {
+        const t = g.traceNode(g.playerNode());
+        if (t < 0) return false;
+        sw.trace(t, 26);
+        g.swarmBody.snap(sw.pos, 0);
+        return true;
+      }
+      if (cmd === 'glimpse') {
+        const a = g.apparitionAhead();
+        if (a < 0) return false;
+        sw.appear(a, 8);
+        g.swarmBody.snap(sw.pos, sw.cohesion);
+        return true;
+      }
+      const n = sw.nodeAround(g.playerNode(), hops, hops);
+      if (n < 0) return false;
+      if (cmd === 'appear') sw.appear(n, 8);
+      else {
+        sw.activate(n);
+        sw.alert(g.playerNode());
+      }
+      g.swarmBody.snap(sw.pos, sw.cohesion);
+      return true;
+    },
+    phase: (n) => {
+      const d = game().director;
+      if (d) d.phase = n;
+    },
+    sonar: () => {
+      game().pingSonar();
+    },
+    wallGaps: () => {
+      const g = game();
+      const out: { at: [number, number, number]; normal: [number, number]; width: number }[] = [];
+      for (const b of g.colliders.boxes) {
+        if (!b.cut || !b.off) continue;
+        for (const [a0, a1] of wallGaps(b.cut, g.decay.walls)) {
+          const m = (a0 + a1) / 2;
+          out.push({ at: b.cut.alongZ ? [b.cut.line, b.cut.floor, m] : [m, b.cut.floor, b.cut.line], normal: b.cut.alongZ ? [1, 0] : [0, 1], width: a1 - a0 });
+        }
+      }
+      return out;
+    },
+    moment: () => {
+      app.moment();
+    },
+    calm: (on) => {
+      game().calm = on;
+      if (on && game().swarm) {
+        game().swarm!.mode = 'dormant';
+        game().swarm!.cohesion = 0;
+      }
+    },
+    anomalies: () => ({ stairs: app.level.stairs, variants: app.level.variants, state: game().anomalies?.state() ?? null }),
+    gotoRoom: (roomId, yawDeg = 0) => {
+      const n = app.level.nav.find((x) => x.room === roomId);
+      if (!n) return false;
+      // «Встать в помещение убежища» — значит быть в убежище, а не в карманном пространстве.
+      game().debugHome();
+      game().teleport(n.x, n.y, n.z, (yawDeg * Math.PI) / 180, 0);
+      return true;
+    },
+    dunes: () => {
+      const g = game();
+      const d = g.level?.duneDoor;
+      if (!d) return null;
+      const p = g.pocket as (typeof g.pocket & { dunes?: { vertebrae: unknown[]; ribs: unknown[]; skull: unknown } }) | null;
+      const inside = g.where === 'pocket' && p?.kind === 'dunes';
+      return { door: { room: d.room, tier: d.tier, at: [...d.at], y: d.y, n: [...d.n], w: d.w }, inside, exit: inside && p?.exit ? [...p.exit] : null, field: g.colliders.fieldAt(d.at[0] - d.n[0] * 0.5, d.at[1] - d.n[1] * 0.5), ...(inside && p?.dunes ? { vertebrae: p.dunes.vertebrae.length, ribs: p.dunes.ribs.length, skull: p.dunes.skull } : {}) };
+    },
+    meta: (id, reel = false) => app.debugMeta(id, reel),
+    seam: () => {
+      const g = game();
+      const sites = g.level?.seams;
+      if (!sites) return null;
+      const sn = g.snapshot() as { seam: Record<string, unknown> };
+      return {
+        world: g.world,
+        twinOf: g.level?.layout?.twinOf ?? null,
+        ...sn.seam,
+        seams: sites.map((st) => ({ room: st.room, tier: st.tier, axis: st.axis, a: [...st.a], b: [...st.b], y: st.y, ends: [...st.ends], cells: st.cells.map((c) => [...c]) })),
+      };
+    },
+    gotoSeam: (i = 0, distance = 1.2) => {
+      const g = game();
+      const st = g.level?.seams?.[i];
+      if (!st) return false;
+      g.debugHome();
+      // Середина нитки; отступ — поперёк неё (вдоль коридора), лицом к нитке.
+      const mx = (st.a[0] + st.b[0]) / 2;
+      const mz = (st.a[1] + st.b[1]) / 2;
+      const [ox, oz] = st.axis === 0 ? [0, distance] : [distance, 0];
+      g.teleport(mx + ox, st.y, mz + oz, Math.atan2(ox, oz), 0);
+      return true;
+    },
+    crossSeam: () => game().forceSeam(),
+    gotoDunes: (distance = 2.5) => {
+      const g = game();
+      const d = g.level?.duneDoor;
+      if (!d) return false;
+      g.debugHome();
+      const x = d.at[0] - d.n[0] * distance;
+      const z = d.at[1] - d.n[1] * distance;
+      g.teleport(x, Math.max(d.y, g.colliders.fieldAt(x, z)), z, Math.atan2(-d.n[0], -d.n[1]), 0);
+      return true;
+    },
+    roomDoorView: (roomId, back = 2.4, pitchDeg = -3) => {
+      const l = app.level;
+      const own = l.nav.filter((n) => n.room === roomId);
+      if (!own.length) return false;
+      const cx = own.reduce((a, n) => a + n.x, 0) / own.length;
+      const cz = own.reduce((a, n) => a + n.z, 0) / own.length;
+      let best: { n: (typeof own)[number]; o: (typeof own)[number]; d: number } | null = null;
+      for (const n of own)
+        for (const i of n.links) {
+          const o = l.nav[i]!;
+          if (o.room === roomId || o.tier !== n.tier || Math.abs(o.y - n.y) > 0.2) continue;
+          const d = Math.hypot((n.x + o.x) / 2 - cx, (n.z + o.z) / 2 - cz);
+          if (!best || d < best.d) best = { n, o, d };
+        }
+      if (!best) return false;
+      const { n, o } = best;
+      const len = Math.hypot(o.x - n.x, o.z - n.z) || 1;
+      const door: [number, number] = [(n.x + o.x) / 2, (n.z + o.z) / 2];
+      const at: [number, number, number] = [door[0] + ((o.x - n.x) / len) * back, o.y, door[1] + ((o.z - n.z) / len) * back];
+      game().debugHome();
+      game().teleport(at[0], at[1], at[2], Math.atan2(-(cx - at[0]), -(cz - at[2])), (pitchDeg * Math.PI) / 180);
+      return { door, center: [cx, cz], at };
+    },
+    shadows: (on) => {
+      game().renderer.debugShadowsOff = !on;
+    },
+    lampLight: (on, gain) => {
+      game().renderer.debugLampsOff = !on;
+      if (gain !== undefined) game().renderer.setLampGain(gain);
+    },
+    scan: (on) => game().renderer.debugScan(on),
+    geometryAudit: () => game().renderer.geometryAudit(),
+    probe: () => {
+      game().draw(1, 0);
+      return game().renderer.probe();
+    },
+    probeColor: () => {
+      game().draw(1, 0);
+      return game().renderer.probeColor();
+    },
+    missingKeys: () => [...app.i18n.missing],
+    sheets: () => [...app.sheetIds],
+    sheetContrast: (id) => {
+      const s = SIGN[id];
+      const g = app.signsCanvas?.getContext('2d');
+      if (!s || !g) return -1;
+      const d = g.getImageData(s.x, s.y, s.pw, s.ph).data;
+      let sum = 0;
+      let sq = 0;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 28) {
+        const l = 0.3 * d[i]! + 0.59 * d[i + 1]! + 0.11 * d[i + 2]!;
+        sum += l;
+        sq += l * l;
+        n += 1;
+      }
+      const mean = sum / n;
+      return Math.sqrt(Math.max(0, sq / n - mean * mean));
+    },
+    sheetMarks: () => app.level.sheets.map((m) => ({ id: m.id, at: [...m.at], n: [...m.n] })),
+    gotoSheet: (index, distance = 1.4) => {
+      const m = app.level.sheets[index];
+      if (!m) return false;
+      game().debugHome();
+      const x = m.at[0] + m.n[0] * distance;
+      const z = m.at[2] + m.n[2] * distance;
+      // Пол — у ближайшего узла того же яруса (лист висит на уровне глаз); у тестового уровня узлов нет.
+      const floor = app.level.nav.filter((n) => Math.abs(n.y + 1.7 - m.at[1]) < 1.2).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+      game().teleport(x, floor ? floor.y : 0, z);
+      app.advance(emptyInput(), 2, 1, STEP);
+      game().aimAt(m.at[0], m.at[1], m.at[2]);
+      app.advance(emptyInput(), 2, 1, STEP);
+      return true;
+    },
+    audio: (fresh) => {
+      const g = app.game;
+      if (fresh && g) app.audio.frame(g, 0, !app.lifecycle.paused);
+      return app.sound.status();
+    },
+    koma: () => app.komaState(),
+    komaSkip: (upTo, leave) => app.komaSkip(upTo, leave),
+    caretaker: (cmd) => {
+      const g = game();
+      const ok = cmd ? g.caretaker(cmd) : true;
+      const cb = g.caretakerBody;
+      return { ok, state: cb.state, why: cb.why, at: [...cb.at], core: [...cb.core] };
+    },
+    showcase: () => showcaseItems(app.params.get('props')?.split(',') ?? null),
+    mute: (on) => app.setMuted(on),
+  };
+  window.__vz = api;
+}
